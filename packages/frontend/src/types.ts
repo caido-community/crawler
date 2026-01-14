@@ -1,4 +1,6 @@
-import { type Caido } from "@caido/sdk-frontend";
-import { type API } from "backend";
+import type { Caido } from "@caido/sdk-frontend";
+import type { API, BackendEvents } from "backend";
 
-export type FrontendSDK = Caido<API, Record<string, never>>;
+export type FrontendSDK = Caido<API, BackendEvents>;
+
+export type { CrawlConfig, CrawlJob, CrawlJobStatus, Result } from "shared";

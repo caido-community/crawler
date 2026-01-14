@@ -7,12 +7,12 @@ import tailwindCaido from "@caido/tailwindcss";
 import path from "path";
 import prefixwrap from "postcss-prefixwrap";
 
-const id = "frontend-vue";
+const id = "crawler";
 export default defineConfig({
   id,
-  name: "Frontend Vue",
-  description: "Plugin template with frontend using VueJS",
-  version: "0.0.0",
+  name: "Crawler",
+  description: "Automatic website crawler for sitemap discovery",
+  version: "0.1.0",
   author: {
     name: "Caido Labs Inc.",
     email: "dev@caido.io",
