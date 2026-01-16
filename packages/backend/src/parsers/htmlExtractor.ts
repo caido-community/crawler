@@ -11,7 +11,7 @@ import type {
   RequestMethod,
   ResponseData,
   UrlSource,
-} from "../types";
+} from "../models/types";
 
 import { BaseExtractor, type ExtractorOptions } from "./baseExtractor";
 

@@ -1,5 +1,5 @@
 /**
- * HTTP Module - Export all HTTP-related classes
+ * Repositories - External integrations
  */
 
 export {

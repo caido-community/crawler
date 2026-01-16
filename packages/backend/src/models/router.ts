@@ -2,7 +2,7 @@
  * Router - Routes requests to handlers based on URL patterns
  */
 
-import type { CrawlingContext, Route, RouteHandler } from "../types";
+import type { CrawlingContext, Route, RouteHandler } from "./types";
 
 // ============================================================================
 // Types

@@ -4,9 +4,9 @@
 
 import { RequestSpec } from "caido:utils";
 
-import { requireSDK } from "../../sdk";
-import type { Request } from "../request";
-import type { ResponseData } from "../types";
+import type { Request } from "../models/request";
+import type { ResponseData } from "../models/types";
+import { requireSDK } from "../sdk";
 
 // ============================================================================
 // Types
@@ -44,7 +44,7 @@ export class HttpClient {
   constructor(options: HttpClientOptions = {}) {
     this.options = {
       defaultHeaders: {},
-      userAgent: "Caido Crawler/1.0",
+      userAgent: "Caido Crawler",
       timeouts: {
         global: 30000,
         connect: 10000,

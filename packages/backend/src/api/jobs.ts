@@ -1,47 +1,23 @@
+/**
+ * Jobs API - Thin layer that delegates to CrawlerService
+ *
+ * API calls services and SDK functions.
+ * Services call store/repository functions.
+ */
+
 import type { SDK } from "caido:plugin";
 import type { CrawlJob, Result } from "shared";
 
-import {
-  generateJobId,
-  getAllCrawlers,
-  getCrawler,
-  ManagedCrawler,
-  registerCrawler,
-  unregisterCrawler,
-} from "../engine";
 import { requireSDK } from "../sdk";
-import { configStore } from "../stores/configStore";
+import { CrawlerService } from "../services";
 import { jobsStore } from "../stores/jobsStore";
-
-function getHost(url: string): string | undefined {
-  try {
-    return new URL(url).hostname;
-  } catch {
-    return undefined;
-  }
-}
 
 export function startCrawl(_sdk: SDK, targetUrl: string): Result<CrawlJob> {
   const sdk = requireSDK();
 
-  const host = getHost(targetUrl);
-  if (host === undefined) {
-    return { kind: "Error", error: "Invalid URL provided." };
-  }
-
-  const existingJob = jobsStore.getJobByHost(host);
-  if (existingJob !== undefined) {
-    return {
-      kind: "Error",
-      error: `A crawl job is already running for ${host}.`,
-    };
-  }
-
-  const config = configStore.getConfig();
-  const jobId = generateJobId();
-
-  const crawler = new ManagedCrawler(jobId, targetUrl, config, {
-    onProgress: (stats) => {
+  // Get jobId first so we can use it in callbacks
+  const result = CrawlerService.start(targetUrl, {
+    onProgress: (stats, jobId) => {
       jobsStore.updateJob(jobId, {
         crawledUrls: stats.crawledUrls,
         discoveredUrls: stats.discoveredUrls,
@@ -52,7 +28,7 @@ export function startCrawl(_sdk: SDK, targetUrl: string): Result<CrawlJob> {
         discovered: stats.discoveredUrls,
       });
     },
-    onComplete: (stats) => {
+    onComplete: (stats, jobId) => {
       jobsStore.updateJob(jobId, {
         status: "completed",
         crawledUrls: stats.crawledUrls,
@@ -63,29 +39,20 @@ export function startCrawl(_sdk: SDK, targetUrl: string): Result<CrawlJob> {
         jobId,
         totalUrls: stats.crawledUrls,
       });
-      unregisterCrawler(jobId);
     },
     onError: (url, error) => {
       sdk.console.log(`[Crawler] Error crawling ${url}: ${error}`);
     },
   });
 
-  registerCrawler(crawler);
+  if (result.kind === "Error") {
+    return result;
+  }
 
-  const job = crawler.getJob();
-  jobsStore.addJob(job);
+  const { job, jobId } = result.value;
+
   sdk.api.send("job:created", job);
-  sdk.api.send("crawl:started", { jobId, host });
-
-  crawler.start().catch((error) => {
-    const errorMessage = error instanceof Error ? error.message : String(error);
-    jobsStore.updateJob(jobId, {
-      status: "failed",
-      completedAt: new Date(),
-    });
-    sdk.api.send("crawl:failed", { jobId, error: errorMessage });
-    unregisterCrawler(jobId);
-  });
+  sdk.api.send("crawl:started", { jobId, host: job.host });
 
   return { kind: "Ok", value: job };
 }
@@ -93,121 +60,80 @@ export function startCrawl(_sdk: SDK, targetUrl: string): Result<CrawlJob> {
 export function stopCrawl(_sdk: SDK, jobId: string): Result<undefined> {
   const sdk = requireSDK();
 
-  const crawler = getCrawler(jobId);
-  if (crawler === undefined) {
-    const job = jobsStore.getJob(jobId);
-    if (job !== undefined) {
-      jobsStore.updateJob(jobId, {
-        status: "completed",
-        completedAt: new Date(),
-      });
-      return { kind: "Ok", value: undefined };
-    }
-    return { kind: "Error", error: "Job not found." };
+  const result = CrawlerService.stop(jobId);
+
+  if (result.kind === "Ok") {
+    sdk.api.send("crawl:completed", {
+      jobId,
+      totalUrls: result.value.totalUrls,
+    });
   }
-
-  crawler.stop();
-  jobsStore.updateJob(jobId, {
-    status: "completed",
-    completedAt: new Date(),
-  });
-  unregisterCrawler(jobId);
-
-  sdk.api.send("crawl:completed", {
-    jobId,
-    totalUrls: crawler.getStats().crawledUrls,
-  });
 
   return { kind: "Ok", value: undefined };
 }
 
 export function pauseCrawl(_sdk: SDK, jobId: string): Result<undefined> {
-  const crawler = getCrawler(jobId);
-  if (crawler === undefined) {
-    return { kind: "Error", error: "Job not found or not running." };
+  const result = CrawlerService.pause(jobId);
+
+  if (result.kind === "Ok") {
+    const sdk = requireSDK();
+    sdk.api.send("job:updated", jobsStore.getJob(jobId));
   }
 
-  crawler.pause();
-  jobsStore.updateJob(jobId, { status: "paused" });
-
-  return { kind: "Ok", value: undefined };
+  return result;
 }
 
 export function resumeCrawl(_sdk: SDK, jobId: string): Result<undefined> {
-  const crawler = getCrawler(jobId);
-  if (crawler === undefined) {
-    return { kind: "Error", error: "Job not found or not running." };
+  const result = CrawlerService.resume(jobId);
+
+  if (result.kind === "Ok") {
+    const sdk = requireSDK();
+    sdk.api.send("job:updated", jobsStore.getJob(jobId));
   }
 
-  crawler.resume();
-  jobsStore.updateJob(jobId, { status: "running" });
-
-  return { kind: "Ok", value: undefined };
+  return result;
 }
 
 export function getJobs(_sdk: SDK): Result<CrawlJob[]> {
-  const storedJobs = jobsStore.getJobs();
-
-  const updatedJobs = storedJobs.map((job) => {
-    const crawler = getCrawler(job.id);
-    if (crawler !== undefined) {
-      return crawler.getJob();
-    }
-    return job;
-  });
-
-  return { kind: "Ok", value: updatedJobs };
+  return CrawlerService.getJobs();
 }
 
 export function getJob(_sdk: SDK, jobId: string): Result<CrawlJob> {
-  const crawler = getCrawler(jobId);
-  if (crawler !== undefined) {
-    return { kind: "Ok", value: crawler.getJob() };
-  }
-
-  const job = jobsStore.getJob(jobId);
-  if (job === undefined) {
-    return { kind: "Error", error: "Job not found." };
-  }
-
-  return { kind: "Ok", value: job };
+  return CrawlerService.getJob(jobId);
 }
 
 export function clearCompletedJobs(_sdk: SDK): Result<undefined> {
   const sdk = requireSDK();
 
-  jobsStore.clearCompletedJobs();
-  sdk.api.send("jobs:cleared");
+  const result = CrawlerService.clearCompleted();
 
-  return { kind: "Ok", value: undefined };
+  if (result.kind === "Ok") {
+    sdk.api.send("jobs:cleared");
+  }
+
+  return result;
 }
 
 export function clearAllJobs(_sdk: SDK): Result<undefined> {
   const sdk = requireSDK();
 
-  const crawlers = getAllCrawlers();
-  for (const crawler of crawlers) {
-    crawler.stop();
-    unregisterCrawler(crawler.getJobId());
+  const result = CrawlerService.clearAll();
+
+  if (result.kind === "Ok") {
+    sdk.api.send("jobs:cleared");
   }
 
-  jobsStore.clearAllJobs();
-  sdk.api.send("jobs:cleared");
-
-  return { kind: "Ok", value: undefined };
+  return result;
 }
 
 export function deleteJob(_sdk: SDK, jobId: string): Result<undefined> {
   const sdk = requireSDK();
 
-  const crawler = getCrawler(jobId);
-  if (crawler !== undefined) {
-    crawler.stop();
-    unregisterCrawler(jobId);
+  const result = CrawlerService.delete(jobId);
+
+  if (result.kind === "Ok") {
+    sdk.api.send("job:deleted", jobId);
   }
 
-  jobsStore.removeJob(jobId);
-  sdk.api.send("job:deleted", jobId);
-
-  return { kind: "Ok", value: undefined };
+  return result;
 }

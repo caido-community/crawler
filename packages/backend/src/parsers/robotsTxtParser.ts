@@ -2,7 +2,7 @@
  * Robots.txt Parser - Parse and evaluate robots.txt rules
  */
 
-import type { RobotsRule, RobotsTxt } from "../types";
+import type { RobotsRule, RobotsTxt } from "../models/types";
 
 // ============================================================================
 // Types

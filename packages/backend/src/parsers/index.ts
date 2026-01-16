@@ -1,5 +1,5 @@
 /**
- * Extractors - Export all extractor classes
+ * Parsers - Content extraction and parsing
  */
 
 export {
@@ -7,10 +7,13 @@ export {
   CompositeExtractor,
   type ExtractorOptions,
 } from "./baseExtractor";
+
 export { HtmlExtractor, type HtmlExtractorOptions } from "./htmlExtractor";
-export { SitemapExtractor } from "./sitemapExtractor";
+
 export {
   RobotsTxtParser,
   parseRobotsTxt,
   type RobotsParserOptions,
 } from "./robotsTxtParser";
+
+export { SitemapExtractor } from "./sitemapExtractor";

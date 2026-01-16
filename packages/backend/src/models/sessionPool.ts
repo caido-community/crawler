@@ -2,9 +2,8 @@
  * Session Pool - Manages a pool of sessions for distributed crawling
  */
 
-import type { SessionData } from "../types";
-
 import { Session } from "./session";
+import type { SessionData } from "./types";
 
 // ============================================================================
 // Types

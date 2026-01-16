@@ -8,7 +8,7 @@ import type {
   ResponseData,
   Sitemap,
   SitemapUrl,
-} from "../types";
+} from "../models/types";
 
 import { BaseExtractor, type ExtractorOptions } from "./baseExtractor";
 

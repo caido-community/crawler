@@ -2,7 +2,7 @@
  * Session - Manages cookies and headers for a crawl session
  */
 
-import type { Cookie, SessionData } from "../types";
+import type { Cookie, SessionData } from "./types";
 
 // ============================================================================
 // Session Class

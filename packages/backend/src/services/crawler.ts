@@ -1,46 +1,65 @@
 /**
- * HttpCrawler - Main HTTP-based crawler engine
+ * CrawlerService - Business logic for crawling operations
  */
 
-import { ConcurrencyPool } from "../concurrency/pool";
-import { DomainRateLimiter } from "../concurrency/rateLimiter";
-import { CompositeExtractor } from "../extractors/baseExtractor";
-import { HtmlExtractor } from "../extractors/htmlExtractor";
-import { RobotsTxtParser } from "../extractors/robotsTxtParser";
-import { SitemapExtractor } from "../extractors/sitemapExtractor";
+import type { CrawlConfig, CrawlJob, CrawlJobStatus, Result } from "shared";
+
+import {
+  ConcurrencyPool,
+  type CrawlerState,
+  type CrawlerStatistics,
+  type CrawlingContext,
+  DomainRateLimiter,
+  type EnqueueLinksOptions,
+  type ExtractedLink,
+  type FailedRequestHandler,
+  type LogInterface,
+  type PostNavigationHook,
+  type PreNavigationHook,
+  Request,
+  type RequestOptions,
+  RequestQueue,
+  type ResponseData,
+  Router,
+  SessionPool,
+  type SessionPoolOptions,
+} from "../models";
+import type { Session } from "../models/session";
+import { CompositeExtractor, HtmlExtractor, RobotsTxtParser } from "../parsers";
 import {
   HttpClient,
   isSuccessResponse,
   shouldRetryResponse,
-} from "../http/httpClient";
-import { Request } from "../request";
-import { RequestQueue } from "../requestQueue";
-import { Router } from "../router/router";
-import { type Session } from "../session/session";
-import { SessionPool, type SessionPoolOptions } from "../session/sessionPool";
-import type {
-  CrawlerEventListener,
-  CrawlerEventType,
-  CrawlerInterface,
-  CrawlerOptions,
-  CrawlerState,
-  CrawlerStatistics,
-  CrawlingContext,
-  EnqueueLinksOptions,
-  ExtractedLink,
-  FailedRequestHandler,
-  LogInterface,
-  PostNavigationHook,
-  PreNavigationHook,
-  RequestOptions,
-  ResponseData,
-} from "../types";
+} from "../repositories";
+import { configStore } from "../stores/configStore";
+import { crawlerStore } from "../stores/crawlerStore";
+import { jobsStore } from "../stores/jobsStore";
 
 // ============================================================================
 // Types
 // ============================================================================
 
-export interface HttpCrawlerOptions extends CrawlerOptions {
+export interface CrawlerOptions {
+  maxRequestsPerCrawl?: number;
+  maxRequestsPerMinute?: number;
+  requestHandlerTimeoutMs?: number;
+  navigationTimeoutMs?: number;
+  maxConcurrency?: number;
+  minConcurrency?: number;
+  maxRequestRetries?: number;
+  retryDelayMs?: number;
+  maxRetryDelayMs?: number;
+  useSessionPool?: boolean;
+  sessionPoolOptions?: SessionPoolOptions;
+  maxDepth?: number;
+  sameDomainOnly?: boolean;
+  respectRobotsTxt?: boolean;
+  userAgent?: string;
+  defaultHeaders?: Record<string, string>;
+  preNavigationHooks?: PreNavigationHook[];
+  postNavigationHooks?: PostNavigationHook[];
+  failedRequestHandler?: FailedRequestHandler;
+  logLevel?: "debug" | "info" | "warn" | "error" | "silent";
   requestQueue?: RequestQueue;
   requestHandler?: (context: CrawlingContext) => Promise<void>;
   router?: Router;
@@ -61,14 +80,21 @@ type EventData = {
   crawlerAborted: undefined;
 };
 
+type CrawlerEventType = keyof EventData;
+type CrawlerEventListener<T = unknown> = (event: {
+  type: CrawlerEventType;
+  data: T;
+  timestamp: Date;
+}) => void;
+
 // ============================================================================
 // HttpCrawler Class
 // ============================================================================
 
-export class HttpCrawler implements CrawlerInterface {
+export class HttpCrawler {
   private options: Required<
     Omit<
-      HttpCrawlerOptions,
+      CrawlerOptions,
       | "requestQueue"
       | "router"
       | "requestHandler"
@@ -136,8 +162,7 @@ export class HttpCrawler implements CrawlerInterface {
   // Collected data
   private dataset: Record<string, unknown>[] = [];
 
-  constructor(options: HttpCrawlerOptions = {}) {
-    // Initialize options with defaults
+  constructor(options: CrawlerOptions = {}) {
     this.options = {
       maxRequestsPerCrawl: options.maxRequestsPerCrawl ?? Infinity,
       maxRequestsPerMinute: options.maxRequestsPerMinute ?? 120,
@@ -152,7 +177,7 @@ export class HttpCrawler implements CrawlerInterface {
       sessionPoolOptions: options.sessionPoolOptions,
       maxDepth: options.maxDepth ?? 10,
       sameDomainOnly: options.sameDomainOnly ?? true,
-      respectRobotsTxt: options.respectRobotsTxt ?? true,
+      respectRobotsTxt: options.respectRobotsTxt ?? false, // Changed to false for security scanners
       userAgent: options.userAgent ?? "Caido Crawler/1.0",
       defaultHeaders: options.defaultHeaders ?? {},
       preNavigationHooks: options.preNavigationHooks ?? [],
@@ -164,7 +189,6 @@ export class HttpCrawler implements CrawlerInterface {
       requestHandler: options.requestHandler,
     };
 
-    // Initialize components
     this.queue = this.options.requestQueue;
     this.router = this.options.router;
 
@@ -188,12 +212,9 @@ export class HttpCrawler implements CrawlerInterface {
     });
 
     if (this.options.useSessionPool) {
-      this.sessionPool = new SessionPool(
-        this.options.sessionPoolOptions as SessionPoolOptions | undefined,
-      );
+      this.sessionPool = new SessionPool(this.options.sessionPoolOptions);
     }
 
-    // Set up extractor
     this.extractor = new CompositeExtractor();
     this.extractor.addExtractor(
       new HtmlExtractor({
@@ -202,9 +223,7 @@ export class HttpCrawler implements CrawlerInterface {
         extractEmails: true,
       }),
     );
-    this.extractor.addExtractor(new SitemapExtractor({ baseUrl: "" }));
 
-    // Set up logger
     this.log = this.createLogger();
   }
 
@@ -212,9 +231,6 @@ export class HttpCrawler implements CrawlerInterface {
   // Public API
   // ============================================================================
 
-  /**
-   * Adds requests to the queue
-   */
   addRequests(requests: (RequestOptions | string)[]): void {
     for (const reqOrUrl of requests) {
       const options: RequestOptions =
@@ -234,9 +250,6 @@ export class HttpCrawler implements CrawlerInterface {
     }
   }
 
-  /**
-   * Starts the crawler
-   */
   async run(): Promise<CrawlerStatistics> {
     if (this.state.status === "running") {
       throw new Error("Crawler is already running");
@@ -262,16 +275,10 @@ export class HttpCrawler implements CrawlerInterface {
     return this.statistics;
   }
 
-  /**
-   * Gets the current state
-   */
   getState(): CrawlerState {
     return { ...this.state };
   }
 
-  /**
-   * Pauses the crawler
-   */
   pause(): void {
     if (this.state.status === "running") {
       this.state.status = "paused";
@@ -281,9 +288,6 @@ export class HttpCrawler implements CrawlerInterface {
     }
   }
 
-  /**
-   * Resumes the crawler
-   */
   resume(): void {
     if (this.state.status === "paused") {
       this.state.status = "running";
@@ -293,9 +297,6 @@ export class HttpCrawler implements CrawlerInterface {
     }
   }
 
-  /**
-   * Aborts the crawler
-   */
   abort(): void {
     this.state.status = "aborted";
     this.queue.clear();
@@ -303,23 +304,14 @@ export class HttpCrawler implements CrawlerInterface {
     this.emit("crawlerAborted", undefined);
   }
 
-  /**
-   * Gets statistics
-   */
   getStatistics(): CrawlerStatistics {
     return { ...this.statistics };
   }
 
-  /**
-   * Gets collected data
-   */
   getData(): Record<string, unknown>[] {
     return [...this.dataset];
   }
 
-  /**
-   * Adds event listener
-   */
   on<T extends CrawlerEventType>(
     event: T,
     listener: CrawlerEventListener<EventData[T]>,
@@ -330,9 +322,6 @@ export class HttpCrawler implements CrawlerInterface {
     this.eventListeners.get(event)!.push(listener as CrawlerEventListener);
   }
 
-  /**
-   * Removes event listener
-   */
   off<T extends CrawlerEventType>(
     event: T,
     listener: CrawlerEventListener<EventData[T]>,
@@ -350,47 +339,35 @@ export class HttpCrawler implements CrawlerInterface {
   // Private Methods
   // ============================================================================
 
-  /**
-   * Main crawl loop
-   */
   private async crawlLoop(): Promise<void> {
     while (
       this.state.status === "running" &&
       (this.queue.hasNextRequest() || this.pool.hasTasks())
     ) {
-      // Check if we've hit the max requests limit
       if (this.state.requestsProcessed >= this.options.maxRequestsPerCrawl) {
         break;
       }
 
-      // Get next request
       const request = this.queue.fetchNextRequest();
       if (request === undefined) {
-        // Wait a bit before checking again
         await this.delay(100);
         continue;
       }
 
-      // Add task to pool
       this.pool.addTask(async () => {
         await this.processRequest(request);
       });
     }
 
-    // Wait for all tasks to complete
     while (this.pool.hasTasks()) {
       await this.delay(100);
     }
   }
 
-  /**
-   * Processes a single request
-   */
   private async processRequest(request: Request): Promise<void> {
     const domain = this.getDomain(request.url);
 
     try {
-      // Check robots.txt
       if (this.options.respectRobotsTxt) {
         const isAllowed = await this.checkRobotsTxt(request.url);
         if (!isAllowed) {
@@ -400,13 +377,10 @@ export class HttpCrawler implements CrawlerInterface {
         }
       }
 
-      // Rate limit
       await this.rateLimiter.acquire(domain);
 
-      // Get session
       const session = this.sessionPool?.getSession();
 
-      // Run pre-navigation hooks
       for (const hook of this.options.preNavigationHooks) {
         await hook({
           request,
@@ -417,13 +391,10 @@ export class HttpCrawler implements CrawlerInterface {
 
       this.emit("requestStarted", request);
 
-      // Make request
       const response = await this.httpClient.send(request);
 
-      // Update statistics
       this.updateStatistics(response);
 
-      // Check if should retry
       if (shouldRetryResponse(response) && request.canRetry()) {
         request.markFailed(`HTTP ${response.statusCode}`);
         this.queue.handleRequestFailure(request, `HTTP ${response.statusCode}`);
@@ -433,27 +404,22 @@ export class HttpCrawler implements CrawlerInterface {
         return;
       }
 
-      // Create context
       const context = this.createContext(request, response, session);
 
-      // Run request handler or router
       if (this.options.requestHandler !== undefined) {
         await this.options.requestHandler(context);
       } else {
         await this.router.route(context);
       }
 
-      // Run post-navigation hooks
       for (const hook of this.options.postNavigationHooks) {
         await hook(context);
       }
 
-      // Mark as handled
       this.queue.markRequestHandled(request);
       this.state.requestsProcessed++;
       this.statistics.requestsFinished++;
 
-      // Update session
       if (session !== undefined) {
         const setCookieHeaders = response.headers["set-cookie"];
         if (setCookieHeaders !== undefined) {
@@ -469,18 +435,13 @@ export class HttpCrawler implements CrawlerInterface {
     }
   }
 
-  /**
-   * Handles request errors
-   */
   private handleRequestError(request: Request, error: Error): void {
     this.log.error(`Request failed: ${request.url}`, { error: error.message });
 
-    // Record error type
     const errorType = error.constructor.name;
     this.statistics.errorsPerType[errorType] =
       (this.statistics.errorsPerType[errorType] ?? 0) + 1;
 
-    // Check if should retry
     if (request.canRetry()) {
       this.queue.handleRequestFailure(request, error.message);
       this.state.requestsRetried++;
@@ -491,7 +452,6 @@ export class HttpCrawler implements CrawlerInterface {
       this.state.requestsFailed++;
       this.statistics.requestsFailed++;
 
-      // Call failed request handler
       if (this.options.failedRequestHandler !== undefined) {
         const result = this.options.failedRequestHandler({
           request,
@@ -509,9 +469,6 @@ export class HttpCrawler implements CrawlerInterface {
     }
   }
 
-  /**
-   * Creates a crawling context
-   */
   private createContext(
     request: Request,
     response: ResponseData,
@@ -536,9 +493,6 @@ export class HttpCrawler implements CrawlerInterface {
     };
   }
 
-  /**
-   * Internal method to enqueue links from a response
-   */
   private enqueueLinksInternal(
     request: Request,
     response: ResponseData,
@@ -548,29 +502,23 @@ export class HttpCrawler implements CrawlerInterface {
       return 0;
     }
 
-    // Update extractor base URL
     const htmlExtractor = new HtmlExtractor({
       baseUrl: options.baseUrl ?? request.url,
     });
     const tempExtractor = new CompositeExtractor();
     tempExtractor.addExtractor(htmlExtractor);
 
-    // Extract links
     const result = tempExtractor.extract(response);
     let links = result.links;
 
-    // Filter by strategy
     links = this.filterLinksByStrategy(links, request.url, options.strategy);
 
-    // Transform links
     let added = 0;
     for (const link of links) {
-      // Check depth
       if (request.depth >= this.options.maxDepth) {
         continue;
       }
 
-      // Create child request
       let childOptions: RequestOptions = {
         url: link.url,
         label: options.label,
@@ -578,7 +526,6 @@ export class HttpCrawler implements CrawlerInterface {
         priority: options.priority,
       };
 
-      // Apply transform function
       if (options.transformRequestFunction !== undefined) {
         const transformed = options.transformRequestFunction(childOptions);
         if (transformed === undefined) {
@@ -599,9 +546,6 @@ export class HttpCrawler implements CrawlerInterface {
     return added;
   }
 
-  /**
-   * Filters links by strategy
-   */
   private filterLinksByStrategy(
     links: ExtractedLink[],
     baseUrl: string,
@@ -654,9 +598,6 @@ export class HttpCrawler implements CrawlerInterface {
     }
   }
 
-  /**
-   * Filters links to same domain
-   */
   private filterSameDomain(
     links: ExtractedLink[],
     baseUrl: string,
@@ -679,31 +620,22 @@ export class HttpCrawler implements CrawlerInterface {
     }
   }
 
-  /**
-   * Gets the root domain from a hostname
-   */
   private getRootDomain(hostname: string): string {
     const parts = hostname.split(".");
     if (parts.length <= 2) {
       return hostname;
     }
-    // Handle common TLDs like .co.uk
     return parts.slice(-2).join(".");
   }
 
-  /**
-   * Checks robots.txt for a URL
-   */
   private async checkRobotsTxt(url: string): Promise<boolean> {
     const domain = this.getDomain(url);
 
-    // Check if already parsed
     let parser = this.robotsParsers.get(domain);
     if (parser !== undefined) {
       return parser.isAllowed(url);
     }
 
-    // Check if currently fetching
     const fetchingPromise = this.robotsFetching.get(domain);
     if (fetchingPromise !== undefined) {
       await fetchingPromise;
@@ -711,7 +643,6 @@ export class HttpCrawler implements CrawlerInterface {
       return parser?.isAllowed(url) ?? true;
     }
 
-    // Fetch robots.txt
     const fetchPromise = this.fetchRobotsTxt(domain);
     this.robotsFetching.set(domain, fetchPromise);
 
@@ -725,9 +656,6 @@ export class HttpCrawler implements CrawlerInterface {
     return parser?.isAllowed(url) ?? true;
   }
 
-  /**
-   * Fetches and parses robots.txt for a domain
-   */
   private async fetchRobotsTxt(domain: string): Promise<void> {
     const robotsUrl = `https://${domain}/robots.txt`;
     const parser = new RobotsTxtParser({ userAgent: this.options.userAgent });
@@ -747,9 +675,6 @@ export class HttpCrawler implements CrawlerInterface {
     this.robotsParsers.set(domain, parser);
   }
 
-  /**
-   * Gets domain from URL
-   */
   private getDomain(url: string): string {
     try {
       return new URL(url).hostname;
@@ -758,9 +683,6 @@ export class HttpCrawler implements CrawlerInterface {
     }
   }
 
-  /**
-   * Updates statistics from response
-   */
   private updateStatistics(response: ResponseData): void {
     const duration = response.timing.durationMs;
 
@@ -776,15 +698,11 @@ export class HttpCrawler implements CrawlerInterface {
       this.statistics.minResponseTimeMs = duration;
     }
 
-    // Track status codes
     const statusCode = response.statusCode;
     this.statistics.requestsWithStatusCode[statusCode] =
       (this.statistics.requestsWithStatusCode[statusCode] ?? 0) + 1;
   }
 
-  /**
-   * Creates logger
-   */
   private createLogger(): LogInterface {
     const level = this.options.logLevel;
 
@@ -828,9 +746,6 @@ export class HttpCrawler implements CrawlerInterface {
     };
   }
 
-  /**
-   * Emits an event
-   */
   private emit<T extends CrawlerEventType>(type: T, data: EventData[T]): void {
     const listeners = this.eventListeners.get(type);
     if (listeners !== undefined) {
@@ -844,10 +759,302 @@ export class HttpCrawler implements CrawlerInterface {
     }
   }
 
-  /**
-   * Delays for milliseconds
-   */
   private delay(ms: number): Promise<void> {
     return new Promise((resolve) => setTimeout(resolve, ms));
   }
 }
+
+// ============================================================================
+// CrawlerService - Service layer for job management
+// ============================================================================
+
+function getHost(url: string): string | undefined {
+  try {
+    return new URL(url).hostname;
+  } catch {
+    return undefined;
+  }
+}
+
+function generateJobId(): string {
+  return `crawl-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
+}
+
+function mapConfigToOptions(config: CrawlConfig): CrawlerOptions {
+  return {
+    maxRequestsPerMinute: Math.floor(60000 / Math.max(config.requestDelay, 1)),
+    maxConcurrency: 5,
+    minConcurrency: 1,
+    maxRequestsPerCrawl: config.maxPagesPerDomain,
+    maxDepth: config.maxDepth,
+    respectRobotsTxt: config.respectRobotsTxt,
+    sameDomainOnly: config.crawlInScopeOnly,
+    userAgent: config.userAgent,
+    maxRequestRetries: 3,
+    retryDelayMs: 1000,
+    maxRetryDelayMs: 30000,
+    requestHandlerTimeoutMs: 60000,
+    navigationTimeoutMs: 30000,
+    useSessionPool: false,
+    logLevel: "info",
+    requestHandler: async (context) => {
+      await context.enqueueLinks({
+        strategy: config.crawlInScopeOnly ? "same-domain" : "all",
+      });
+    },
+  };
+}
+
+export interface CrawlStats {
+  crawledUrls: number;
+  discoveredUrls: number;
+  queuedUrls: number;
+  failedUrls: number;
+  startedAt: Date;
+  lastActivityAt: Date;
+}
+
+export interface StartCrawlCallbacks {
+  onProgress?: (stats: CrawlStats, jobId: string) => void;
+  onUrlCrawled?: (url: string, statusCode: number) => void;
+  onUrlDiscovered?: (url: string) => void;
+  onError?: (url: string, error: string) => void;
+  onComplete?: (stats: CrawlStats, jobId: string) => void;
+}
+
+class CrawlerServiceClass {
+  start(
+    targetUrl: string,
+    callbacks: StartCrawlCallbacks = {},
+  ): Result<{ job: CrawlJob; jobId: string }> {
+    const host = getHost(targetUrl);
+    if (host === undefined) {
+      return { kind: "Error", error: "Invalid URL provided." };
+    }
+
+    const existingJob = jobsStore.getJobByHost(host);
+    if (existingJob !== undefined) {
+      return {
+        kind: "Error",
+        error: `A crawl job is already running for ${host}.`,
+      };
+    }
+
+    const config = configStore.getConfig();
+    const jobId = generateJobId();
+    const options = mapConfigToOptions(config);
+
+    const crawler = new HttpCrawler(options);
+
+    // Track state
+    const startedAt = new Date();
+    let lastActivityAt = new Date();
+    let status: CrawlJobStatus = "running";
+
+    const getStats = (): CrawlStats => {
+      const state = crawler.getState();
+      const statistics = crawler.getStatistics();
+      return {
+        crawledUrls: statistics.requestsFinished,
+        discoveredUrls: statistics.requestsTotal,
+        queuedUrls: state.requestsQueued - state.requestsProcessed,
+        failedUrls: statistics.requestsFailed,
+        startedAt,
+        lastActivityAt,
+      };
+    };
+
+    // Set up event handlers
+    crawler.on("requestCompleted", (event) => {
+      lastActivityAt = new Date();
+      const { request, response } = event.data as {
+        request: Request;
+        response: { statusCode: number };
+      };
+      callbacks.onUrlCrawled?.(request.url, response.statusCode);
+      callbacks.onProgress?.(getStats(), jobId);
+    });
+
+    crawler.on("requestQueued", (event) => {
+      const request = event.data;
+      callbacks.onUrlDiscovered?.(request.url);
+    });
+
+    crawler.on("requestFailed", (event) => {
+      lastActivityAt = new Date();
+      const { request, error } = event.data as {
+        request: Request;
+        error: Error;
+      };
+      callbacks.onError?.(request.url, error.message);
+    });
+
+    crawler.on("crawlerCompleted", () => {
+      if (status === "running") {
+        status = "completed";
+        callbacks.onComplete?.(getStats(), jobId);
+      }
+    });
+
+    crawler.on("crawlerAborted", () => {
+      status = "completed";
+      callbacks.onComplete?.(getStats(), jobId);
+    });
+
+    // Add initial URL and register crawler
+    crawler.addRequests([targetUrl]);
+    crawlerStore.register(jobId, crawler);
+
+    // Create job record
+    const job: CrawlJob = {
+      id: jobId,
+      targetUrl,
+      host,
+      status: "running",
+      depth: config.maxDepth,
+      discoveredUrls: 0,
+      crawledUrls: 0,
+      startedAt,
+      completedAt: undefined,
+    };
+
+    jobsStore.addJob(job);
+
+    // Start crawling (fire and forget)
+    crawler
+      .run()
+      .then(() => {
+        if (status === "running") {
+          status = "completed";
+        }
+      })
+      .catch(() => {
+        status = "failed";
+      });
+
+    return { kind: "Ok", value: { job, jobId } };
+  }
+
+  stop(jobId: string): Result<{ totalUrls: number }> {
+    const crawler = crawlerStore.get(jobId);
+    if (crawler === undefined) {
+      const job = jobsStore.getJob(jobId);
+      if (job !== undefined) {
+        jobsStore.updateJob(jobId, {
+          status: "completed",
+          completedAt: new Date(),
+        });
+        return { kind: "Ok", value: { totalUrls: job.crawledUrls } };
+      }
+      return { kind: "Error", error: "Job not found." };
+    }
+
+    crawler.abort();
+    const stats = crawler.getStatistics();
+
+    jobsStore.updateJob(jobId, {
+      status: "completed",
+      completedAt: new Date(),
+    });
+    crawlerStore.unregister(jobId);
+
+    return { kind: "Ok", value: { totalUrls: stats.requestsFinished } };
+  }
+
+  pause(jobId: string): Result<undefined> {
+    const crawler = crawlerStore.get(jobId);
+    if (crawler === undefined) {
+      return { kind: "Error", error: "Job not found or not running." };
+    }
+
+    crawler.pause();
+    jobsStore.updateJob(jobId, { status: "paused" });
+
+    return { kind: "Ok", value: undefined };
+  }
+
+  resume(jobId: string): Result<undefined> {
+    const crawler = crawlerStore.get(jobId);
+    if (crawler === undefined) {
+      return { kind: "Error", error: "Job not found or not running." };
+    }
+
+    crawler.resume();
+    jobsStore.updateJob(jobId, { status: "running" });
+
+    return { kind: "Ok", value: undefined };
+  }
+
+  getJob(jobId: string): Result<CrawlJob> {
+    const crawler = crawlerStore.get(jobId);
+    if (crawler !== undefined) {
+      const stats = crawler.getStatistics();
+      const storedJob = jobsStore.getJob(jobId);
+
+      if (storedJob !== undefined) {
+        return {
+          kind: "Ok",
+          value: {
+            ...storedJob,
+            crawledUrls: stats.requestsFinished,
+            discoveredUrls: stats.requestsTotal,
+          },
+        };
+      }
+    }
+
+    const job = jobsStore.getJob(jobId);
+    if (job === undefined) {
+      return { kind: "Error", error: "Job not found." };
+    }
+
+    return { kind: "Ok", value: job };
+  }
+
+  getJobs(): Result<CrawlJob[]> {
+    const storedJobs = jobsStore.getJobs();
+
+    const updatedJobs = storedJobs.map((job) => {
+      const crawler = crawlerStore.get(job.id);
+      if (crawler !== undefined) {
+        const stats = crawler.getStatistics();
+        return {
+          ...job,
+          crawledUrls: stats.requestsFinished,
+          discoveredUrls: stats.requestsTotal,
+        };
+      }
+      return job;
+    });
+
+    return { kind: "Ok", value: updatedJobs };
+  }
+
+  delete(jobId: string): Result<undefined> {
+    const crawler = crawlerStore.get(jobId);
+    if (crawler !== undefined) {
+      crawler.abort();
+      crawlerStore.unregister(jobId);
+    }
+
+    jobsStore.removeJob(jobId);
+    return { kind: "Ok", value: undefined };
+  }
+
+  clearCompleted(): Result<undefined> {
+    jobsStore.clearCompletedJobs();
+    return { kind: "Ok", value: undefined };
+  }
+
+  clearAll(): Result<undefined> {
+    const crawlers = crawlerStore.getAll();
+    for (const crawler of crawlers) {
+      crawler.abort();
+    }
+    crawlerStore.clear();
+    jobsStore.clearAllJobs();
+    return { kind: "Ok", value: undefined };
+  }
+}
+
+export const CrawlerService = new CrawlerServiceClass();
