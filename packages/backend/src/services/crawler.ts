@@ -155,8 +155,8 @@ export class HttpCrawler {
       sessionPoolOptions: options.sessionPoolOptions,
       maxDepth: options.maxDepth ?? 10,
       sameDomainOnly: options.sameDomainOnly ?? true,
-      respectRobotsTxt: options.respectRobotsTxt ?? false, // Changed to false for security scanners
-      userAgent: options.userAgent ?? "Caido Crawler",
+      respectRobotsTxt: options.respectRobotsTxt ?? false, 
+      userAgent: options.userAgent ?? "Caido-Crawler",
       defaultHeaders: options.defaultHeaders ?? {},
       preNavigationHooks: options.preNavigationHooks ?? [],
       postNavigationHooks: options.postNavigationHooks ?? [],
@@ -310,27 +310,37 @@ export class HttpCrawler {
   }
 
   private async crawlLoop(): Promise<void> {
-    while (
-      this.state.status === "running" &&
-      (this.queue.hasNextRequest() || this.pool.hasTasks())
-    ) {
+    let continueLoop = true;
+    while (continueLoop && this.state.status === "running") {
       if (this.state.requestsProcessed >= this.options.maxRequestsPerCrawl) {
         break;
       }
 
-      const request = this.queue.fetchNextRequest();
-      if (request === undefined) {
-        await this.delay(100);
+      while (
+        this.state.status === "running" &&
+        this.state.requestsProcessed < this.options.maxRequestsPerCrawl &&
+        (this.queue.hasNextRequest() || this.pool.hasTasks())
+      ) {
+        const request = this.queue.fetchNextRequest();
+        if (request === undefined) {
+          await this.delay(50);
+          continue;
+        }
+
+        this.pool.addTask(async () => {
+          await this.processRequest(request);
+        });
+      }
+
+      while (this.pool.hasTasks()) {
+        await this.delay(50);
+      }
+
+      if (this.queue.hasNextRequest()) {
         continue;
       }
 
-      this.pool.addTask(async () => {
-        await this.processRequest(request);
-      });
-    }
-
-    while (this.pool.hasTasks()) {
-      await this.delay(100);
+      continueLoop = false;
     }
   }
 
@@ -341,7 +351,6 @@ export class HttpCrawler {
       if (this.options.respectRobotsTxt) {
         const isAllowed = await this.checkRobotsTxt(request.url);
         if (!isAllowed) {
-          this.log.debug(`Blocked by robots.txt: ${request.url}`);
           this.queue.markRequestHandled(request);
           return;
         }
@@ -746,7 +755,14 @@ function generateJobId(): string {
   return `crawl-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
 }
 
-function mapConfigToOptions(config: CrawlConfig): CrawlerOptions {
+function mapConfigToOptions(
+  config: CrawlConfig,
+  isManual = false,
+): CrawlerOptions {
+  // Manual crawls ignore crawlInScopeOnly and crawl all links
+  // Auto-crawls respect crawlInScopeOnly setting
+  const useScopeFilter = isManual ? false : config.crawlInScopeOnly;
+
   return {
     maxRequestsPerMinute: Math.floor(60000 / Math.max(config.requestDelay, 1)),
     maxConcurrency: 5,
@@ -754,7 +770,7 @@ function mapConfigToOptions(config: CrawlConfig): CrawlerOptions {
     maxRequestsPerCrawl: config.maxPagesPerDomain,
     maxDepth: config.maxDepth,
     respectRobotsTxt: config.respectRobotsTxt,
-    sameDomainOnly: config.crawlInScopeOnly,
+    sameDomainOnly: useScopeFilter,
     userAgent: config.userAgent,
     maxRequestRetries: 3,
     retryDelayMs: 1000,
@@ -765,7 +781,7 @@ function mapConfigToOptions(config: CrawlConfig): CrawlerOptions {
     logLevel: "info",
     requestHandler: async (context) => {
       await context.enqueueLinks({
-        strategy: config.crawlInScopeOnly ? "same-domain" : "all",
+        strategy: useScopeFilter ? "same-domain" : "all",
       });
     },
   };
@@ -792,6 +808,7 @@ class CrawlerServiceClass {
   start(
     targetUrl: string,
     callbacks: StartCrawlCallbacks = {},
+    isManual = false,
   ): Result<{ job: CrawlJob; jobId: string }> {
     const host = getHost(targetUrl);
     if (host === undefined) {
@@ -808,7 +825,7 @@ class CrawlerServiceClass {
 
     const config = configStore.getConfig();
     const jobId = generateJobId();
-    const options = mapConfigToOptions(config);
+    const options = mapConfigToOptions(config, isManual);
 
     const crawler = new HttpCrawler(options);
     const startedAt = new Date();

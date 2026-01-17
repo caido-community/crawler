@@ -1,10 +1,3 @@
-/**
- * Jobs API - Thin layer that delegates to CrawlerService
- *
- * API calls services and SDK functions.
- * Services call store/repository functions.
- */
-
 import type { SDK } from "caido:plugin";
 import type { CrawlJob, Result } from "shared";
 
@@ -16,34 +9,38 @@ export function startCrawl(_sdk: SDK, targetUrl: string): Result<CrawlJob> {
   const sdk = requireSDK();
 
   // Get jobId first so we can use it in callbacks
-  const result = CrawlerService.start(targetUrl, {
-    onProgress: (stats, jobId) => {
-      jobsStore.updateJob(jobId, {
-        crawledUrls: stats.crawledUrls,
-        discoveredUrls: stats.discoveredUrls,
-      });
-      sdk.api.send("crawl:progress", {
-        jobId,
-        crawled: stats.crawledUrls,
-        discovered: stats.discoveredUrls,
-      });
+  const result = CrawlerService.start(
+    targetUrl,
+    {
+      onProgress: (stats, jobId) => {
+        jobsStore.updateJob(jobId, {
+          crawledUrls: stats.crawledUrls,
+          discoveredUrls: stats.discoveredUrls,
+        });
+        sdk.api.send("crawl:progress", {
+          jobId,
+          crawled: stats.crawledUrls,
+          discovered: stats.discoveredUrls,
+        });
+      },
+      onComplete: (stats, jobId) => {
+        jobsStore.updateJob(jobId, {
+          status: "completed",
+          crawledUrls: stats.crawledUrls,
+          discoveredUrls: stats.discoveredUrls,
+          completedAt: new Date(),
+        });
+        sdk.api.send("crawl:completed", {
+          jobId,
+          totalUrls: stats.crawledUrls,
+        });
+      },
+      onError: (url, error) => {
+        sdk.console.log(`[Crawler] Error crawling ${url}: ${error}`);
+      },
     },
-    onComplete: (stats, jobId) => {
-      jobsStore.updateJob(jobId, {
-        status: "completed",
-        crawledUrls: stats.crawledUrls,
-        discoveredUrls: stats.discoveredUrls,
-        completedAt: new Date(),
-      });
-      sdk.api.send("crawl:completed", {
-        jobId,
-        totalUrls: stats.crawledUrls,
-      });
-    },
-    onError: (url, error) => {
-      sdk.console.log(`[Crawler] Error crawling ${url}: ${error}`);
-    },
-  });
+    true,
+  ); // isManual = true for manual crawls
 
   if (result.kind === "Error") {
     return result;

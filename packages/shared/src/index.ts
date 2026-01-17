@@ -17,15 +17,15 @@ export type CrawlConfig = z.infer<typeof CrawlConfigSchema>;
 
 export const DEFAULT_CONFIG: CrawlConfig = {
   enabled: false,
-  crawlInScopeOnly: true,
+  crawlInScopeOnly: false,
   crawlOnNewHost: false,
   requestDelay: 100,
-  maxDepth: 3,
+  maxDepth: 5,
   maxPagesPerDomain: 100,
   includePatterns: [],
   excludePatterns: [],
   respectRobotsTxt: false,
-  userAgent: "Caido Crawler",
+  userAgent: "Caido-Crawler",
 };
 
 export const CrawlJobStatusSchema = z.enum([

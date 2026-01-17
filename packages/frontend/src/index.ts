@@ -28,7 +28,7 @@ export const init = (sdk: FrontendSDK) => {
 
   // Register context menu command for manual crawl
   sdk.commands.register("crawl-url", {
-    name: "Crawl URL",
+    name: "Crawl Host",
     run: async (context) => {
       switch (context.type) {
         case "RequestRowContext": {
@@ -38,26 +38,17 @@ export const init = (sdk: FrontendSDK) => {
             return;
           }
 
-          // Get unique hosts from selected requests
-          const hosts = new Set<string>();
+          const origins = new Set<string>();
           for (const req of requests) {
-            try {
-              const url = new URL(req.host + req.path);
-              hosts.add(url.origin);
-            } catch {
-              // Skip invalid URLs
-            }
+            const protocol = req.isTls ? "https" : "http";
+            const defaultPort = req.isTls ? 443 : 80;
+            const portStr = req.port === defaultPort ? "" : `:${req.port}`;
+            origins.add(`${protocol}://${req.host}${portStr}`);
           }
 
-          if (hosts.size === 0) {
-            sdk.window.showToast("No valid URLs found", { variant: "error" });
-            return;
-          }
-
-          // Start crawl for each unique host
           let started = 0;
-          for (const host of hosts) {
-            const result = await sdk.backend.startCrawl(host);
+          for (const origin of origins) {
+            const result = await sdk.backend.startCrawl(origin);
             if (result.kind === "Ok") {
               started++;
             }
@@ -68,29 +59,27 @@ export const init = (sdk: FrontendSDK) => {
               `Started crawling ${started} host${started === 1 ? "" : "s"}`,
               { variant: "success" },
             );
+          } else {
+            sdk.window.showToast("Failed to start crawl", { variant: "error" });
           }
           break;
         }
 
         case "RequestContext": {
-          const request = context.request;
-          if (request.type !== "RequestFull") {
-            sdk.window.showToast("Full request required", { variant: "error" });
-            return;
-          }
+          const req = context.request;
 
-          try {
-            const url = new URL(request.host + request.path);
-            const result = await sdk.backend.startCrawl(url.origin);
-            if (result.kind === "Ok") {
-              sdk.window.showToast(`Started crawling ${result.value.host}`, {
-                variant: "success",
-              });
-            } else {
-              sdk.window.showToast(result.error, { variant: "error" });
-            }
-          } catch {
-            sdk.window.showToast("Invalid URL", { variant: "error" });
+          const protocol = req.isTls ? "https" : "http";
+          const defaultPort = req.isTls ? 443 : 80;
+          const portStr = req.port === defaultPort ? "" : `:${req.port}`;
+          const origin = `${protocol}://${req.host}${portStr}`;
+
+          const result = await sdk.backend.startCrawl(origin);
+          if (result.kind === "Ok") {
+            sdk.window.showToast(`Started crawling ${result.value.host}`, {
+              variant: "success",
+            });
+          } else {
+            sdk.window.showToast(result.error, { variant: "error" });
           }
           break;
         }
