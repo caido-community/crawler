@@ -24,8 +24,8 @@ export const DEFAULT_CONFIG: CrawlConfig = {
   maxPagesPerDomain: 100,
   includePatterns: [],
   excludePatterns: [],
-  respectRobotsTxt: true,
-  userAgent: "Caido Crawler/1.0",
+  respectRobotsTxt: false,
+  userAgent: "Caido Crawler",
 };
 
 export const CrawlJobStatusSchema = z.enum([

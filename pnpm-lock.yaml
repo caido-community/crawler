@@ -44,19 +44,16 @@ importers:
       shared:
         specifier: workspace:*
         version: link:../shared
-      zod:
-        specifier: ^4.1.12
-        version: 4.3.5
     devDependencies:
       '@caido/sdk-backend':
-        specifier: ^0.52.0
-        version: 0.52.0
+        specifier: 0.55.0-beta.0
+        version: 0.55.0-beta.0
 
   packages/frontend:
     dependencies:
       '@caido/primevue':
-        specifier: 0.3.1
-        version: 0.3.1(primevue@4.1.0(vue@3.5.22(typescript@5.5.4)))
+        specifier: 0.3.3
+        version: 0.3.3(primevue@4.1.0(vue@3.5.22(typescript@5.5.4)))
       pinia:
         specifier: ^3.0.3
         version: 3.0.4(typescript@5.5.4)(vue@3.5.22(typescript@5.5.4))
@@ -71,11 +68,11 @@ importers:
         version: 3.5.22(typescript@5.5.4)
     devDependencies:
       '@caido/sdk-backend':
-        specifier: ^0.52.0
-        version: 0.52.0
+        specifier: 0.55.0-beta.0
+        version: 0.55.0-beta.0
       '@caido/sdk-frontend':
-        specifier: ^0.52.0
-        version: 0.52.0(@ai-sdk/provider@2.0.1)(@codemirror/state@6.5.3)(@codemirror/view@6.38.5)(vue@3.5.22(typescript@5.5.4))
+        specifier: 0.54.2-beta.10
+        version: 0.54.2-beta.10(@ai-sdk/provider@2.0.1)(@codemirror/state@6.5.3)(@codemirror/view@6.38.5)(vue@3.5.22(typescript@5.5.4))
       '@codemirror/view':
         specifier: 6.38.5
         version: 6.38.5
@@ -91,10 +88,6 @@ importers:
       zod:
         specifier: ^4.1.12
         version: 4.3.5
-    devDependencies:
-      '@caido/sdk-backend':
-        specifier: ^0.52.0
-        version: 0.52.0
 
 packages:
 
@@ -137,19 +130,19 @@ packages:
   '@caido/plugin-manifest@0.3.0':
     resolution: {integrity: sha512-HRGHf65K2sfSdaEUwkCNDlurJ4zL0bOUg/Db4u6CrwjTTzmg2gOzP6SzLRj+69gWmxOm5LUjhInNHaMIRmQkHw==}
 
-  '@caido/primevue@0.3.1':
-    resolution: {integrity: sha512-OJBduCPKt1E8KkjTwAfAJuiIU11r0rtK7RL1pxh7N2jRcGWx+ZSyTR0VCngDF+gDM0MATfBF/G3EYWuS8HtuqA==}
+  '@caido/primevue@0.3.3':
+    resolution: {integrity: sha512-y4wam8i8aK716HZLtq7jGcT3VeDeUefB+ulgkCCWPkXPQtfBBpOzImHwv3EvfZhw4EaSoKZbOzoqZ/TO8KgXNw==}
     peerDependencies:
       primevue: 4.1.0
 
-  '@caido/quickjs-types@0.21.1':
-    resolution: {integrity: sha512-efLd1W92xun+E8/hdLBJD+pdDdf7TQ85zI28ZyYP3EfiQljq5zOyt9Sco45oWHyDGxvezUXeyee/NJ0NWxv3hg==}
+  '@caido/quickjs-types@0.25.3':
+    resolution: {integrity: sha512-RrcBiG+tnpG0+417zBLx1Q7e8a3K9nCIjGf7Gs9CVeCtV807wAc/UE4q8gL5kXAfDpSsgCKISWJa0iDWO5ltZw==}
 
-  '@caido/sdk-backend@0.52.0':
-    resolution: {integrity: sha512-LRVM5RbkWbNhTSpNuqE8ALjZmPmZLo7JyalCTp6tHcMDwVOw1C2Weg8kKG48CltmEkoVqPoNpf+2qtX1JdNjLQ==}
+  '@caido/sdk-backend@0.55.0-beta.0':
+    resolution: {integrity: sha512-vPFur+H82zZoMpi/v77pUC7LTSZyDmBcTnTdHx03hZP3IEPsWlV9yX7z/WE9Yny8Le4etpfcb1IQswrS9YJp3A==}
 
-  '@caido/sdk-frontend@0.52.0':
-    resolution: {integrity: sha512-ZNBkY6AhfxNNb8UbhbWN8xuX4LNyzc7EBEhCdhmIt5G8bNr9cxS3xY9/FLbZSxx1rtnrK/xEfpKoYzQv5EegDA==}
+  '@caido/sdk-frontend@0.54.2-beta.10':
+    resolution: {integrity: sha512-bTIrdQ3oskXV7z8/MWiiLDHvRxz9FPAuDIM+CllpVYwNszpfzV6d90KeijN1oAkEfW+wguLtzZ/ZZHisJr1mPw==}
     peerDependencies:
       '@ai-sdk/provider': ^2.0.0
       '@codemirror/state': ^6.0.0
@@ -2729,18 +2722,18 @@ snapshots:
     dependencies:
       ajv: 8.17.1
 
-  '@caido/primevue@0.3.1(primevue@4.1.0(vue@3.5.22(typescript@5.5.4)))':
+  '@caido/primevue@0.3.3(primevue@4.1.0(vue@3.5.22(typescript@5.5.4)))':
     dependencies:
       primevue: 4.1.0(vue@3.5.22(typescript@5.5.4))
 
-  '@caido/quickjs-types@0.21.1': {}
+  '@caido/quickjs-types@0.25.3': {}
 
-  '@caido/sdk-backend@0.52.0':
+  '@caido/sdk-backend@0.55.0-beta.0':
     dependencies:
-      '@caido/quickjs-types': 0.21.1
+      '@caido/quickjs-types': 0.25.3
       '@caido/sdk-shared': 0.1.1
 
-  '@caido/sdk-frontend@0.52.0(@ai-sdk/provider@2.0.1)(@codemirror/state@6.5.3)(@codemirror/view@6.38.5)(vue@3.5.22(typescript@5.5.4))':
+  '@caido/sdk-frontend@0.54.2-beta.10(@ai-sdk/provider@2.0.1)(@codemirror/state@6.5.3)(@codemirror/view@6.38.5)(vue@3.5.22(typescript@5.5.4))':
     dependencies:
       '@ai-sdk/provider': 2.0.1
       '@codemirror/state': 6.5.3

@@ -9,8 +9,5 @@
   },
   "dependencies": {
     "zod": "^4.1.12"
-  },
-  "devDependencies": {
-    "@caido/sdk-backend": "^0.52.0"
   }
 }

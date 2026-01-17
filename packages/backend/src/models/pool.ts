@@ -1,21 +1,13 @@
-/**
- * Concurrency Pool - Manages parallel request execution
- */
-
-// ============================================================================
-// Types
-// ============================================================================
-
-export interface ConcurrencyPoolOptions {
+export type ConcurrencyPoolOptions = {
   maxConcurrency?: number;
   minConcurrency?: number;
   desiredConcurrency?: number;
   taskTimeoutMs?: number;
   autoscale?: boolean;
   autoscaleIntervalMs?: number;
-}
+};
 
-export interface PoolStats {
+export type PoolStats = {
   currentConcurrency: number;
   desiredConcurrency: number;
   pendingTasks: number;
@@ -23,20 +15,16 @@ export interface PoolStats {
   completedTasks: number;
   failedTasks: number;
   avgTaskDurationMs: number;
-}
+};
 
 type TaskFunction<T> = () => Promise<T>;
 
-interface QueuedTask<T> {
+type QueuedTask<T> = {
   task: TaskFunction<T>;
   resolve: (value: T) => void;
   reject: (error: Error) => void;
   createdAt: number;
-}
-
-// ============================================================================
-// Concurrency Pool Class
-// ============================================================================
+};
 
 export class ConcurrencyPool {
   private options: Required<ConcurrencyPoolOptions>;
@@ -44,14 +32,10 @@ export class ConcurrencyPool {
   private runningTasks: Set<Promise<void>> = new Set();
   private isRunning: boolean = false;
   private isPaused: boolean = false;
-
-  // Stats
   private completedTasks: number = 0;
   private failedTasks: number = 0;
   private totalTaskDuration: number = 0;
   private currentConcurrency: number;
-
-  // Autoscaling
   private autoscaleTimer: ReturnType<typeof setInterval> | undefined;
   private recentDurations: number[] = [];
   private recentSuccessRate: number = 1;
@@ -69,9 +53,6 @@ export class ConcurrencyPool {
     this.currentConcurrency = this.options.desiredConcurrency;
   }
 
-  /**
-   * Starts the pool
-   */
   start(): void {
     if (this.isRunning) {
       return;
@@ -80,38 +61,26 @@ export class ConcurrencyPool {
     this.isRunning = true;
     this.isPaused = false;
 
-    // Start autoscaling if enabled
     if (this.options.autoscale) {
       this.startAutoscaling();
     }
 
-    // Process any queued tasks
     this.processQueue();
   }
 
-  /**
-   * Stops the pool
-   */
   async stop(): Promise<void> {
     this.isRunning = false;
     this.stopAutoscaling();
 
-    // Wait for running tasks to complete
     if (this.runningTasks.size > 0) {
       await Promise.all(this.runningTasks);
     }
   }
 
-  /**
-   * Pauses the pool (running tasks continue, no new ones start)
-   */
   pause(): void {
     this.isPaused = true;
   }
 
-  /**
-   * Resumes the pool
-   */
   resume(): void {
     this.isPaused = false;
     if (this.isRunning) {
@@ -119,10 +88,6 @@ export class ConcurrencyPool {
     }
   }
 
-  /**
-   * Adds a task to the pool
-   * Returns a promise that resolves when the task completes
-   */
   addTask<T>(task: TaskFunction<T>): Promise<T> {
     return new Promise<T>((resolve, reject) => {
       this.taskQueue.push({
@@ -138,17 +103,11 @@ export class ConcurrencyPool {
     });
   }
 
-  /**
-   * Adds multiple tasks and waits for all to complete
-   */
   async addTasks<T>(tasks: TaskFunction<T>[]): Promise<T[]> {
     const promises = tasks.map((task) => this.addTask(task));
     return Promise.all(promises);
   }
 
-  /**
-   * Processes tasks from the queue
-   */
   private processQueue(): void {
     if (!this.isRunning || this.isPaused) {
       return;
@@ -165,9 +124,6 @@ export class ConcurrencyPool {
     }
   }
 
-  /**
-   * Runs a single task
-   */
   private runTask<T>(queuedTask: QueuedTask<T>): void {
     const startTime = Date.now();
     const promiseRef: { current: Promise<void> | undefined } = {
@@ -176,7 +132,6 @@ export class ConcurrencyPool {
 
     const runAsync = async (): Promise<void> => {
       try {
-        // Create timeout promise
         const timeoutPromise = new Promise<never>((_, reject) => {
           setTimeout(() => {
             reject(
@@ -185,7 +140,6 @@ export class ConcurrencyPool {
           }, this.options.taskTimeoutMs);
         });
 
-        // Race between task and timeout
         const result = await Promise.race([queuedTask.task(), timeoutPromise]);
 
         const duration = Date.now() - startTime;
@@ -210,54 +164,38 @@ export class ConcurrencyPool {
     this.runningTasks.add(taskPromise);
   }
 
-  /**
-   * Records a successful task
-   */
   private recordSuccess(duration: number): void {
     this.completedTasks++;
     this.totalTaskDuration += duration;
     this.recentDurations.push(duration);
 
-    // Keep only last 100 durations
     if (this.recentDurations.length > 100) {
       this.recentDurations.shift();
     }
 
-    // Update success rate
     this.recentSuccessRate =
       this.completedTasks / (this.completedTasks + this.failedTasks);
   }
 
-  /**
-   * Records a failed task
-   */
   private recordFailure(duration: number): void {
     this.failedTasks++;
     this.totalTaskDuration += duration;
     this.recentDurations.push(duration);
 
-    // Keep only last 100 durations
     if (this.recentDurations.length > 100) {
       this.recentDurations.shift();
     }
 
-    // Update success rate
     this.recentSuccessRate =
       this.completedTasks / (this.completedTasks + this.failedTasks);
   }
 
-  /**
-   * Starts autoscaling
-   */
   private startAutoscaling(): void {
     this.autoscaleTimer = setInterval(() => {
       this.autoscale();
     }, this.options.autoscaleIntervalMs);
   }
 
-  /**
-   * Stops autoscaling
-   */
   private stopAutoscaling(): void {
     if (this.autoscaleTimer !== undefined) {
       clearInterval(this.autoscaleTimer);
@@ -265,39 +203,25 @@ export class ConcurrencyPool {
     }
   }
 
-  /**
-   * Autoscales the pool based on performance
-   */
   private autoscale(): void {
     const { minConcurrency, maxConcurrency } = this.options;
 
-    // Calculate average task duration
     const avgDuration =
       this.recentDurations.length > 0
         ? this.recentDurations.reduce((a, b) => a + b, 0) /
           this.recentDurations.length
         : 0;
 
-    // Calculate load factor (how full is the queue)
     const queueLoad = this.taskQueue.length / this.currentConcurrency;
 
-    // Scaling logic
     let newConcurrency = this.currentConcurrency;
 
-    // Scale up if:
-    // - Queue is building up
-    // - Success rate is good
-    // - Tasks are completing reasonably fast
     if (queueLoad > 2 && this.recentSuccessRate > 0.9 && avgDuration < 5000) {
       newConcurrency = Math.min(
         maxConcurrency,
         Math.ceil(this.currentConcurrency * 1.2),
       );
-    }
-    // Scale down if:
-    // - Too many failures
-    // - Tasks are slow
-    else if (this.recentSuccessRate < 0.5 || avgDuration > 30000) {
+    } else if (this.recentSuccessRate < 0.5 || avgDuration > 30000) {
       newConcurrency = Math.max(
         minConcurrency,
         Math.floor(this.currentConcurrency * 0.8),
@@ -307,9 +231,6 @@ export class ConcurrencyPool {
     this.currentConcurrency = newConcurrency;
   }
 
-  /**
-   * Sets the desired concurrency
-   */
   setConcurrency(concurrency: number): void {
     this.currentConcurrency = Math.max(
       this.options.minConcurrency,
@@ -318,16 +239,10 @@ export class ConcurrencyPool {
     this.processQueue();
   }
 
-  /**
-   * Gets the current concurrency
-   */
   getConcurrency(): number {
     return this.currentConcurrency;
   }
 
-  /**
-   * Gets pool statistics
-   */
   getStats(): PoolStats {
     const totalTasks = this.completedTasks + this.failedTasks;
     return {
@@ -342,41 +257,25 @@ export class ConcurrencyPool {
     };
   }
 
-  /**
-   * Checks if the pool is running
-   */
   isActive(): boolean {
     return this.isRunning;
   }
 
-  /**
-   * Checks if the pool is paused
-   */
   isPausedState(): boolean {
     return this.isPaused;
   }
 
-  /**
-   * Checks if there are pending or running tasks
-   */
   hasTasks(): boolean {
     return this.taskQueue.length > 0 || this.runningTasks.size > 0;
   }
 
-  /**
-   * Clears all pending tasks
-   */
   clearPending(): void {
-    // Reject all pending tasks
     for (const task of this.taskQueue) {
       task.reject(new Error("Task cancelled"));
     }
     this.taskQueue = [];
   }
 
-  /**
-   * Aborts all tasks
-   */
   abort(): void {
     this.isRunning = false;
     this.stopAutoscaling();

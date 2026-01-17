@@ -1,7 +1,3 @@
-/**
- * CrawlerService - Business logic for crawling operations
- */
-
 import type { CrawlConfig, CrawlJob, CrawlJobStatus, Result } from "shared";
 
 import {
@@ -35,11 +31,7 @@ import { configStore } from "../stores/configStore";
 import { crawlerStore } from "../stores/crawlerStore";
 import { jobsStore } from "../stores/jobsStore";
 
-// ============================================================================
-// Types
-// ============================================================================
-
-export interface CrawlerOptions {
+export type CrawlerOptions = {
   maxRequestsPerCrawl?: number;
   maxRequestsPerMinute?: number;
   requestHandlerTimeoutMs?: number;
@@ -63,7 +55,7 @@ export interface CrawlerOptions {
   requestQueue?: RequestQueue;
   requestHandler?: (context: CrawlingContext) => Promise<void>;
   router?: Router;
-}
+};
 
 type EventData = {
   requestQueued: Request;
@@ -87,10 +79,6 @@ type CrawlerEventListener<T = unknown> = (event: {
   timestamp: Date;
 }) => void;
 
-// ============================================================================
-// HttpCrawler Class
-// ============================================================================
-
 export class HttpCrawler {
   private options: Required<
     Omit<
@@ -113,7 +101,6 @@ export class HttpCrawler {
     sessionPoolOptions: CrawlerOptions["sessionPoolOptions"];
   };
 
-  // Core components
   private queue: RequestQueue;
   private httpClient: HttpClient;
   private pool: ConcurrencyPool;
@@ -121,12 +108,9 @@ export class HttpCrawler {
   private sessionPool: SessionPool | undefined;
   private router: Router;
   private extractor: CompositeExtractor;
-
-  // Robots.txt cache per domain
   private robotsParsers: Map<string, RobotsTxtParser> = new Map();
   private robotsFetching: Map<string, Promise<void>> = new Map();
 
-  // State
   private state: CrawlerState = {
     status: "idle",
     requestsQueued: 0,
@@ -135,7 +119,6 @@ export class HttpCrawler {
     requestsRetried: 0,
   };
 
-  // Statistics
   private statistics: CrawlerStatistics = {
     requestsFinished: 0,
     requestsFailed: 0,
@@ -152,14 +135,9 @@ export class HttpCrawler {
     errorsPerType: {},
   };
 
-  // Event emitter
   private eventListeners: Map<CrawlerEventType, CrawlerEventListener[]> =
     new Map();
-
-  // Logger
   private log: LogInterface;
-
-  // Collected data
   private dataset: Record<string, unknown>[] = [];
 
   constructor(options: CrawlerOptions = {}) {
@@ -178,7 +156,7 @@ export class HttpCrawler {
       maxDepth: options.maxDepth ?? 10,
       sameDomainOnly: options.sameDomainOnly ?? true,
       respectRobotsTxt: options.respectRobotsTxt ?? false, // Changed to false for security scanners
-      userAgent: options.userAgent ?? "Caido Crawler/1.0",
+      userAgent: options.userAgent ?? "Caido Crawler",
       defaultHeaders: options.defaultHeaders ?? {},
       preNavigationHooks: options.preNavigationHooks ?? [],
       postNavigationHooks: options.postNavigationHooks ?? [],
@@ -226,10 +204,6 @@ export class HttpCrawler {
 
     this.log = this.createLogger();
   }
-
-  // ============================================================================
-  // Public API
-  // ============================================================================
 
   addRequests(requests: (RequestOptions | string)[]): void {
     for (const reqOrUrl of requests) {
@@ -334,10 +308,6 @@ export class HttpCrawler {
       }
     }
   }
-
-  // ============================================================================
-  // Private Methods
-  // ============================================================================
 
   private async crawlLoop(): Promise<void> {
     while (
@@ -669,7 +639,7 @@ export class HttpCrawler {
         parser.parse(response.body);
       }
     } catch {
-      // Ignore errors - assume everything is allowed
+      /* empty */
     }
 
     this.robotsParsers.set(domain, parser);
@@ -764,10 +734,6 @@ export class HttpCrawler {
   }
 }
 
-// ============================================================================
-// CrawlerService - Service layer for job management
-// ============================================================================
-
 function getHost(url: string): string | undefined {
   try {
     return new URL(url).hostname;
@@ -805,22 +771,22 @@ function mapConfigToOptions(config: CrawlConfig): CrawlerOptions {
   };
 }
 
-export interface CrawlStats {
+export type CrawlStats = {
   crawledUrls: number;
   discoveredUrls: number;
   queuedUrls: number;
   failedUrls: number;
   startedAt: Date;
   lastActivityAt: Date;
-}
+};
 
-export interface StartCrawlCallbacks {
+export type StartCrawlCallbacks = {
   onProgress?: (stats: CrawlStats, jobId: string) => void;
   onUrlCrawled?: (url: string, statusCode: number) => void;
   onUrlDiscovered?: (url: string) => void;
   onError?: (url: string, error: string) => void;
   onComplete?: (stats: CrawlStats, jobId: string) => void;
-}
+};
 
 class CrawlerServiceClass {
   start(
@@ -845,8 +811,6 @@ class CrawlerServiceClass {
     const options = mapConfigToOptions(config);
 
     const crawler = new HttpCrawler(options);
-
-    // Track state
     const startedAt = new Date();
     let lastActivityAt = new Date();
     let status: CrawlJobStatus = "running";
@@ -864,7 +828,6 @@ class CrawlerServiceClass {
       };
     };
 
-    // Set up event handlers
     crawler.on("requestCompleted", (event) => {
       lastActivityAt = new Date();
       const { request, response } = event.data as {
@@ -901,11 +864,9 @@ class CrawlerServiceClass {
       callbacks.onComplete?.(getStats(), jobId);
     });
 
-    // Add initial URL and register crawler
     crawler.addRequests([targetUrl]);
     crawlerStore.register(jobId, crawler);
 
-    // Create job record
     const job: CrawlJob = {
       id: jobId,
       targetUrl,
@@ -920,7 +881,6 @@ class CrawlerServiceClass {
 
     jobsStore.addJob(job);
 
-    // Start crawling (fire and forget)
     crawler
       .run()
       .then(() => {

@@ -3,4 +3,4 @@ import type { API, BackendEvents } from "backend";
 
 export type FrontendSDK = Caido<API, BackendEvents>;
 
-export type { CrawlConfig, CrawlJob, CrawlJobStatus, Result } from "shared";
+export type { CrawlConfig, CrawlJob } from "shared";

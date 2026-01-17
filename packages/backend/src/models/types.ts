@@ -1,11 +1,3 @@
-/**
- * Core types for the Crawler Engine
- */
-
-// ============================================================================
-// Request Types
-// ============================================================================
-
 export type RequestMethod =
   | "GET"
   | "POST"
@@ -22,9 +14,9 @@ export type RequestState =
   | "failed"
   | "retrying";
 
-export type RequestPriority = number; // Higher = more priority
+export type RequestPriority = number;
 
-export interface RequestOptions {
+export type RequestOptions = {
   url: string;
   method?: RequestMethod;
   headers?: Record<string, string>;
@@ -36,9 +28,9 @@ export interface RequestOptions {
   maxRetries?: number;
   noRetry?: boolean;
   skipNavigation?: boolean;
-}
+};
 
-export interface RequestData {
+export type RequestData = {
   id: string;
   url: string;
   method: RequestMethod;
@@ -57,13 +49,9 @@ export interface RequestData {
   parentRequestId?: string;
   createdAt: Date;
   processedAt?: Date;
-}
+};
 
-// ============================================================================
-// Response Types
-// ============================================================================
-
-export interface ResponseData {
+export type ResponseData = {
   url: string;
   statusCode: number;
   headers: Record<string, string[]>;
@@ -78,11 +66,7 @@ export interface ResponseData {
     completedAt: Date;
     durationMs: number;
   };
-}
-
-// ============================================================================
-// Extractor Types
-// ============================================================================
+};
 
 export type UrlSource =
   | "anchor"
@@ -98,50 +82,46 @@ export type UrlSource =
   | "json"
   | "javascript";
 
-export interface ExtractedLink {
+export type ExtractedLink = {
   url: string;
   source: UrlSource;
   text?: string;
   attributes?: Record<string, string>;
-}
+};
 
-export interface ExtractionResult {
+export type ExtractionResult = {
   links: ExtractedLink[];
   forms: ExtractedForm[];
   emails: string[];
   metadata: PageMetadata;
-}
+};
 
-export interface ExtractedForm {
+export type ExtractedForm = {
   action: string;
   method: RequestMethod;
   inputs: FormInput[];
   id?: string;
   name?: string;
-}
+};
 
-export interface FormInput {
+export type FormInput = {
   name: string;
   type: string;
   value?: string;
   required: boolean;
-  options?: string[]; // For select inputs
-}
+  options?: string[];
+};
 
-export interface PageMetadata {
+export type PageMetadata = {
   title?: string;
   description?: string;
   keywords?: string[];
   canonical?: string;
   language?: string;
   robotsMeta?: string;
-}
+};
 
-// ============================================================================
-// Sitemap Types
-// ============================================================================
-
-export interface SitemapUrl {
+export type SitemapUrl = {
   loc: string;
   lastmod?: string;
   changefreq?:
@@ -153,34 +133,26 @@ export interface SitemapUrl {
     | "yearly"
     | "never";
   priority?: number;
-}
+};
 
-export interface Sitemap {
+export type Sitemap = {
   urls: SitemapUrl[];
-  sitemaps: string[]; // Nested sitemap references
-}
+  sitemaps: string[];
+};
 
-// ============================================================================
-// Robots.txt Types
-// ============================================================================
-
-export interface RobotsTxt {
+export type RobotsTxt = {
   rules: RobotsRule[];
   sitemaps: string[];
   crawlDelay?: number;
-}
+};
 
-export interface RobotsRule {
+export type RobotsRule = {
   userAgent: string;
   allow: string[];
   disallow: string[];
-}
+};
 
-// ============================================================================
-// Session Types
-// ============================================================================
-
-export interface SessionData {
+export type SessionData = {
   id: string;
   cookies: Cookie[];
   headers: Record<string, string>;
@@ -191,9 +163,9 @@ export interface SessionData {
   maxUsageCount: number;
   isBlocked: boolean;
   errorScore: number;
-}
+};
 
-export interface Cookie {
+export type Cookie = {
   name: string;
   value: string;
   domain?: string;
@@ -202,94 +174,59 @@ export interface Cookie {
   httpOnly?: boolean;
   secure?: boolean;
   sameSite?: "Strict" | "Lax" | "None";
-}
+};
 
-// ============================================================================
-// Concurrency Types
-// ============================================================================
-
-export interface PoolOptions {
+export type PoolOptions = {
   maxConcurrency: number;
   minConcurrency: number;
   desiredConcurrency: number;
   scaleUpStepRatio: number;
   scaleDownStepRatio: number;
   maybeRunIntervalMs: number;
-}
-
-// RateLimiterOptions is defined in concurrency/rateLimiter.ts
-
-// ============================================================================
-// Router Types
-// ============================================================================
+};
 
 export type RouteHandler = (context: CrawlingContext) => Promise<void>;
 
-export interface Route {
+export type Route = {
   pattern: string | RegExp;
   handler: RouteHandler;
   label?: string;
-}
+};
 
-// ============================================================================
-// Crawler Types
-// ============================================================================
-
-export interface CrawlerOptions {
-  // Request handling
+export type CrawlerOptions = {
   maxRequestsPerCrawl?: number;
   maxRequestsPerMinute?: number;
   requestHandlerTimeoutMs?: number;
   navigationTimeoutMs?: number;
-
-  // Concurrency
   maxConcurrency?: number;
   minConcurrency?: number;
-
-  // Retries
   maxRequestRetries?: number;
   retryDelayMs?: number;
   maxRetryDelayMs?: number;
-
-  // Session
   useSessionPool?: boolean;
-  // sessionPoolOptions is typed as unknown here to avoid circular deps
-  // The actual type is SessionPoolOptions from session/sessionPool.ts
   sessionPoolOptions?: unknown;
-
-  // Crawling behavior
   maxDepth?: number;
   sameDomainOnly?: boolean;
   respectRobotsTxt?: boolean;
-
-  // Headers
   userAgent?: string;
   defaultHeaders?: Record<string, string>;
-
-  // Hooks
   preNavigationHooks?: PreNavigationHook[];
   postNavigationHooks?: PostNavigationHook[];
   failedRequestHandler?: FailedRequestHandler;
-
-  // Logging
   logLevel?: "debug" | "info" | "warn" | "error" | "silent";
-}
+};
 
-// SessionPoolOptions is defined in session/sessionPool.ts to avoid circular deps
-
-export interface CrawlingContext {
+export type CrawlingContext = {
   request: RequestData;
   response: ResponseData;
   session?: SessionData;
   crawler: CrawlerInterface;
-
-  // Helper methods
   enqueueLinks: (options?: EnqueueLinksOptions) => Promise<number>;
   pushData: (data: Record<string, unknown>) => void;
   log: LogInterface;
-}
+};
 
-export interface EnqueueLinksOptions {
+export type EnqueueLinksOptions = {
   selector?: string;
   baseUrl?: string;
   strategy?: "all" | "same-domain" | "same-hostname" | "same-origin";
@@ -299,17 +236,17 @@ export interface EnqueueLinksOptions {
   label?: string;
   userData?: Record<string, unknown>;
   priority?: number;
-}
+};
 
-export interface CrawlerInterface {
+export type CrawlerInterface = {
   addRequests: (requests: RequestOptions[]) => void;
   getState: () => CrawlerState;
   pause: () => void;
   resume: () => void;
   abort: () => void;
-}
+};
 
-export interface CrawlerState {
+export type CrawlerState = {
   status: "idle" | "running" | "paused" | "completed" | "aborted";
   requestsQueued: number;
   requestsProcessed: number;
@@ -317,11 +254,7 @@ export interface CrawlerState {
   requestsRetried: number;
   startedAt?: Date;
   completedAt?: Date;
-}
-
-// ============================================================================
-// Hook Types
-// ============================================================================
+};
 
 export type PreNavigationHook = (
   context: PreNavigationContext,
@@ -335,35 +268,27 @@ export type FailedRequestHandler = (
   context: FailedRequestContext,
 ) => Promise<void> | void;
 
-export interface PreNavigationContext {
+export type PreNavigationContext = {
   request: RequestData;
   session?: SessionData;
   crawler: CrawlerInterface;
-}
+};
 
-export interface FailedRequestContext {
+export type FailedRequestContext = {
   request: RequestData;
   error: Error;
   session?: SessionData;
   crawler: CrawlerInterface;
-}
+};
 
-// ============================================================================
-// Log Interface
-// ============================================================================
-
-export interface LogInterface {
+export type LogInterface = {
   debug: (message: string, data?: Record<string, unknown>) => void;
   info: (message: string, data?: Record<string, unknown>) => void;
   warn: (message: string, data?: Record<string, unknown>) => void;
   error: (message: string, data?: Record<string, unknown>) => void;
-}
+};
 
-// ============================================================================
-// Statistics Types
-// ============================================================================
-
-export interface CrawlerStatistics {
+export type CrawlerStatistics = {
   requestsFinished: number;
   requestsFailed: number;
   requestsRetried: number;
@@ -377,11 +302,7 @@ export interface CrawlerStatistics {
   crawlerRuntimeMs: number;
   requestsWithStatusCode: Record<number, number>;
   errorsPerType: Record<string, number>;
-}
-
-// ============================================================================
-// Event Types
-// ============================================================================
+};
 
 export type CrawlerEventType =
   | "requestQueued"
@@ -397,11 +318,11 @@ export type CrawlerEventType =
   | "crawlerCompleted"
   | "crawlerAborted";
 
-export interface CrawlerEvent<T = unknown> {
+export type CrawlerEvent<T = unknown> = {
   type: CrawlerEventType;
   data: T;
   timestamp: Date;
-}
+};
 
 export type CrawlerEventListener<T = unknown> = (
   event: CrawlerEvent<T>,
