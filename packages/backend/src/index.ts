@@ -14,6 +14,7 @@ import {
   updateConfig,
 } from "./api";
 import { setSDK } from "./sdk";
+import { AutoCrawlService } from "./services";
 import { configStore } from "./stores/configStore";
 import { jobsStore } from "./stores/jobsStore";
 import type { BackendEvents, BackendSDK } from "./types";
@@ -40,6 +41,8 @@ export function init(sdk: BackendSDK) {
 
   configStore.initialize();
   jobsStore.initialize();
+
+  AutoCrawlService.init(sdk);
 
   sdk.api.register("getConfig", getConfig);
   sdk.api.register("updateConfig", updateConfig);
