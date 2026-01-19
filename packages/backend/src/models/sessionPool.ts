@@ -2,12 +2,7 @@
  * Session Pool - Manages a pool of sessions for distributed crawling
  */
 
-import { Session } from "./session";
-import type { SessionData } from "./types";
-
-// ============================================================================
-// Types
-// ============================================================================
+import { Session, type SessionData } from "./session";
 
 export interface SessionPoolOptions {
   maxPoolSize?: number;
@@ -19,9 +14,13 @@ export interface SessionPoolOptions {
   restoreStateFunction?: () => SessionData[] | undefined;
 }
 
-// ============================================================================
-// Session Pool Class
-// ============================================================================
+export interface SessionPoolStats {
+  total: number;
+  usable: number;
+  blocked: number;
+  avgUsageCount: number;
+  avgErrorScore: number;
+}
 
 export class SessionPool {
   private sessions: Map<string, Session> = new Map();
@@ -232,13 +231,7 @@ export class SessionPool {
   /**
    * Gets pool statistics
    */
-  getStats(): {
-    total: number;
-    usable: number;
-    blocked: number;
-    avgUsageCount: number;
-    avgErrorScore: number;
-  } {
+  getStats(): SessionPoolStats {
     let usable = 0;
     let blocked = 0;
     let totalUsage = 0;

@@ -2,24 +2,18 @@
  * HTML Extractor - Comprehensive HTML link and content extraction
  */
 
+import type { RequestMethod, ResponseData } from "../models/types";
+
+import { BaseExtractor, type ExtractorOptions } from "./baseExtractor";
 import type {
   ExtractedForm,
   ExtractedLink,
   ExtractionResult,
   FormInput,
   PageMetadata,
-  RequestMethod,
-  ResponseData,
   UrlSource,
-} from "../models/types";
+} from "./types";
 
-import { BaseExtractor, type ExtractorOptions } from "./baseExtractor";
-
-// ============================================================================
-// Regex Patterns
-// ============================================================================
-
-// Link extraction patterns
 const PATTERNS = {
   // Standard HTML elements
   anchor: /<a\s+[^>]*href\s*=\s*["']([^"']+)["'][^>]*>/gi,
@@ -80,10 +74,6 @@ const PATTERNS = {
   // Email extraction
   email: /\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b/g,
 };
-
-// ============================================================================
-// HTML Extractor Class
-// ============================================================================
 
 export interface HtmlExtractorOptions extends ExtractorOptions {
   extractScripts?: boolean;
@@ -190,10 +180,6 @@ export class HtmlExtractor extends BaseExtractor {
       metadata,
     };
   }
-
-  // ============================================================================
-  // Link Extraction Methods
-  // ============================================================================
 
   private extractWithPattern(
     html: string,
@@ -412,10 +398,6 @@ export class HtmlExtractor extends BaseExtractor {
     return this.extractWithPattern(html, PATTERNS.dataUrl, "link");
   }
 
-  // ============================================================================
-  // Form Extraction
-  // ============================================================================
-
   private extractFormDetails(html: string): ExtractedForm[] {
     const forms: ExtractedForm[] = [];
     const formRegex = new RegExp(
@@ -543,10 +525,6 @@ export class HtmlExtractor extends BaseExtractor {
     return match !== null ? match[1] : undefined;
   }
 
-  // ============================================================================
-  // Email Extraction
-  // ============================================================================
-
   private extractEmails(html: string): string[] {
     const emails: string[] = [];
     const regex = new RegExp(PATTERNS.email.source, PATTERNS.email.flags);
@@ -557,10 +535,6 @@ export class HtmlExtractor extends BaseExtractor {
     }
     return [...new Set(emails)];
   }
-
-  // ============================================================================
-  // Metadata Extraction
-  // ============================================================================
 
   private extractMetadata(html: string): PageMetadata {
     const metadata: PageMetadata = {};
@@ -612,10 +586,6 @@ export class HtmlExtractor extends BaseExtractor {
 
     return metadata;
   }
-
-  // ============================================================================
-  // Static Helpers
-  // ============================================================================
 
   /**
    * Filters links to only navigable ones (pages, not resources)

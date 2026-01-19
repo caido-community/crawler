@@ -1,6 +1,8 @@
 import { configStore } from "../stores/configStore";
 import { jobsStore } from "../stores/jobsStore";
-import type { BackendSDK } from "../types";
+import type { BackendSDK, InterceptedRequest } from "../types";
+
+// jobsStore is still used for checking existing jobs, but updates are handled by CrawlerService
 
 import { CrawlerService } from "./crawler";
 
@@ -13,12 +15,7 @@ class AutoCrawlServiceClass {
     });
   }
 
-  private handleResponse(
-    request: Parameters<
-      Parameters<BackendSDK["events"]["onInterceptResponse"]>[0]
-    >[1],
-    sdk: BackendSDK,
-  ): void {
+  private handleResponse(request: InterceptedRequest, sdk: BackendSDK): void {
     const config = configStore.getConfig();
 
     if (!config.enabled) {
@@ -54,11 +51,7 @@ class AutoCrawlServiceClass {
     this.startCrawl(url, sdk);
   }
 
-  private buildUrl(
-    request: Parameters<
-      Parameters<BackendSDK["events"]["onInterceptResponse"]>[0]
-    >[1],
-  ): string {
+  private buildUrl(request: InterceptedRequest): string {
     const host = request.getHost();
     const port = request.getPort();
     const isTls = request.getTls();
@@ -74,13 +67,9 @@ class AutoCrawlServiceClass {
   }
 
   private startCrawl(url: string, sdk: BackendSDK): void {
+    // jobsStore updates are now handled internally by CrawlerService
     const result = CrawlerService.start(url, {
       onProgress: (stats, jobId) => {
-        jobsStore.updateJob(jobId, {
-          crawledUrls: stats.crawledUrls,
-          discoveredUrls: stats.discoveredUrls,
-        });
-
         sdk.api.send("crawl:progress", {
           jobId,
           crawledUrls: stats.crawledUrls,
@@ -88,13 +77,6 @@ class AutoCrawlServiceClass {
         });
       },
       onComplete: (stats, jobId) => {
-        jobsStore.updateJob(jobId, {
-          status: "completed",
-          crawledUrls: stats.crawledUrls,
-          discoveredUrls: stats.discoveredUrls,
-          completedAt: new Date(),
-        });
-
         sdk.api.send("crawl:completed", {
           jobId,
           totalUrls: stats.crawledUrls,

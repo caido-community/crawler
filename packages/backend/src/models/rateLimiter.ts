@@ -3,24 +3,31 @@
  * Implements token bucket algorithm with sliding window
  */
 
-// ============================================================================
-// Types
-// ============================================================================
-
 export interface RateLimiterOptions {
-  maxRequestsPerSecond?: number;
-  maxRequestsPerMinute?: number;
-  minDelayMs?: number;
-  maxDelayMs?: number;
-  burstSize?: number;
+  maxRequestsPerSecond: number;
+  maxRequestsPerMinute: number;
+  minDelayMs: number;
+  maxDelayMs: number;
+  burstSize: number;
 }
 
-// ============================================================================
-// Rate Limiter Class
-// ============================================================================
+export interface RateLimiterStats {
+  requestsInLastSecond: number;
+  requestsInLastMinute: number;
+  availableTokens: number;
+  isThrottled: boolean;
+}
+
+const DEFAULT_RATE_LIMITER_OPTIONS: RateLimiterOptions = {
+  maxRequestsPerSecond: 10,
+  maxRequestsPerMinute: 300,
+  minDelayMs: 100,
+  maxDelayMs: 60000,
+  burstSize: 5,
+};
 
 export class RateLimiter {
-  private options: Required<RateLimiterOptions>;
+  private options: RateLimiterOptions;
 
   // Token bucket
   private tokens: number;
@@ -31,13 +38,10 @@ export class RateLimiter {
   private requestTimes: number[] = [];
   private windowSizeMs: number = 60000; // 1 minute
 
-  constructor(options: RateLimiterOptions = {}) {
+  constructor(options: Partial<RateLimiterOptions> = {}) {
     this.options = {
-      maxRequestsPerSecond: options.maxRequestsPerSecond ?? 10,
-      maxRequestsPerMinute: options.maxRequestsPerMinute ?? 300,
-      minDelayMs: options.minDelayMs ?? 100,
-      maxDelayMs: options.maxDelayMs ?? 60000,
-      burstSize: options.burstSize ?? 5,
+      ...DEFAULT_RATE_LIMITER_OPTIONS,
+      ...options,
     };
 
     // Initialize token bucket
@@ -169,12 +173,7 @@ export class RateLimiter {
   /**
    * Gets current rate statistics
    */
-  getStats(): {
-    requestsInLastSecond: number;
-    requestsInLastMinute: number;
-    availableTokens: number;
-    isThrottled: boolean;
-  } {
+  getStats(): RateLimiterStats {
     const now = Date.now();
     const oneSecondAgo = now - 1000;
     const oneMinuteAgo = now - 60000;
@@ -232,23 +231,19 @@ export class RateLimiter {
   /**
    * Gets current options
    */
-  getOptions(): Required<RateLimiterOptions> {
+  getOptions(): RateLimiterOptions {
     return { ...this.options };
   }
 }
-
-// ============================================================================
-// Per-Domain Rate Limiter
-// ============================================================================
 
 /**
  * Manages rate limiting per domain
  */
 export class DomainRateLimiter {
   private limiters: Map<string, RateLimiter> = new Map();
-  private defaultOptions: RateLimiterOptions;
+  private defaultOptions: Partial<RateLimiterOptions>;
 
-  constructor(options: RateLimiterOptions = {}) {
+  constructor(options: Partial<RateLimiterOptions> = {}) {
     this.defaultOptions = options;
   }
 
@@ -313,8 +308,8 @@ export class DomainRateLimiter {
   /**
    * Gets stats for all domains
    */
-  getAllStats(): Record<string, ReturnType<RateLimiter["getStats"]>> {
-    const stats: Record<string, ReturnType<RateLimiter["getStats"]>> = {};
+  getAllStats(): Record<string, RateLimiterStats> {
+    const stats: Record<string, RateLimiterStats> = {};
     for (const [domain, limiter] of this.limiters) {
       stats[domain] = limiter.getStats();
     }

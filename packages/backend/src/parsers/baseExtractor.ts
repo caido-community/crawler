@@ -2,11 +2,9 @@
  * Base Extractor - Abstract base class for content extractors
  */
 
-import type {
-  ExtractedLink,
-  ExtractionResult,
-  ResponseData,
-} from "../models/types";
+import type { ResponseData } from "../models/types";
+
+import type { ExtractedLink, ExtractionResult } from "./types";
 
 export interface ExtractorOptions {
   baseUrl: string;

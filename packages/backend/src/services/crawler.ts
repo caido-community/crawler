@@ -57,6 +57,35 @@ export type CrawlerOptions = {
   router?: Router;
 };
 
+/**
+ * Internal options type with required primitive fields and optional complex fields
+ */
+type HttpCrawlerInternalOptions = {
+  maxRequestsPerCrawl: number;
+  maxRequestsPerMinute: number;
+  requestHandlerTimeoutMs: number;
+  navigationTimeoutMs: number;
+  maxConcurrency: number;
+  minConcurrency: number;
+  maxRequestRetries: number;
+  retryDelayMs: number;
+  maxRetryDelayMs: number;
+  useSessionPool: boolean;
+  maxDepth: number;
+  sameDomainOnly: boolean;
+  respectRobotsTxt: boolean;
+  userAgent: string;
+  defaultHeaders: Record<string, string>;
+  logLevel: "debug" | "info" | "warn" | "error" | "silent";
+  requestQueue: RequestQueue;
+  router: Router;
+  preNavigationHooks: PreNavigationHook[];
+  postNavigationHooks: PostNavigationHook[];
+  requestHandler?: (context: CrawlingContext) => Promise<void>;
+  failedRequestHandler?: FailedRequestHandler;
+  sessionPoolOptions?: SessionPoolOptions;
+};
+
 type EventData = {
   requestQueued: Request;
   requestStarted: Request;
@@ -80,26 +109,7 @@ type CrawlerEventListener<T = unknown> = (event: {
 }) => void;
 
 export class HttpCrawler {
-  private options: Required<
-    Omit<
-      CrawlerOptions,
-      | "requestQueue"
-      | "router"
-      | "requestHandler"
-      | "preNavigationHooks"
-      | "postNavigationHooks"
-      | "failedRequestHandler"
-      | "sessionPoolOptions"
-    >
-  > & {
-    requestQueue: RequestQueue;
-    router: Router;
-    requestHandler?: (context: CrawlingContext) => Promise<void>;
-    preNavigationHooks: PreNavigationHook[];
-    postNavigationHooks: PostNavigationHook[];
-    failedRequestHandler?: FailedRequestHandler;
-    sessionPoolOptions: CrawlerOptions["sessionPoolOptions"];
-  };
+  private options: HttpCrawlerInternalOptions;
 
   private queue: RequestQueue;
   private httpClient: HttpClient;
@@ -155,7 +165,7 @@ export class HttpCrawler {
       sessionPoolOptions: options.sessionPoolOptions,
       maxDepth: options.maxDepth ?? 10,
       sameDomainOnly: options.sameDomainOnly ?? true,
-      respectRobotsTxt: options.respectRobotsTxt ?? false, 
+      respectRobotsTxt: options.respectRobotsTxt ?? false,
       userAgent: options.userAgent ?? "Caido-Crawler",
       defaultHeaders: options.defaultHeaders ?? {},
       preNavigationHooks: options.preNavigationHooks ?? [],
@@ -851,8 +861,14 @@ class CrawlerServiceClass {
         request: Request;
         response: { statusCode: number };
       };
+      const stats = getStats();
+      // Update jobsStore internally (moved from API layer)
+      jobsStore.updateJob(jobId, {
+        crawledUrls: stats.crawledUrls,
+        discoveredUrls: stats.discoveredUrls,
+      });
       callbacks.onUrlCrawled?.(request.url, response.statusCode);
-      callbacks.onProgress?.(getStats(), jobId);
+      callbacks.onProgress?.(stats, jobId);
     });
 
     crawler.on("requestQueued", (event) => {
@@ -872,13 +888,29 @@ class CrawlerServiceClass {
     crawler.on("crawlerCompleted", () => {
       if (status === "running") {
         status = "completed";
-        callbacks.onComplete?.(getStats(), jobId);
+        const stats = getStats();
+        // Update jobsStore internally (moved from API layer)
+        jobsStore.updateJob(jobId, {
+          status: "completed",
+          crawledUrls: stats.crawledUrls,
+          discoveredUrls: stats.discoveredUrls,
+          completedAt: new Date(),
+        });
+        callbacks.onComplete?.(stats, jobId);
       }
     });
 
     crawler.on("crawlerAborted", () => {
       status = "completed";
-      callbacks.onComplete?.(getStats(), jobId);
+      const stats = getStats();
+      // Update jobsStore internally (moved from API layer)
+      jobsStore.updateJob(jobId, {
+        status: "completed",
+        crawledUrls: stats.crawledUrls,
+        discoveredUrls: stats.discoveredUrls,
+        completedAt: new Date(),
+      });
+      callbacks.onComplete?.(stats, jobId);
     });
 
     crawler.addRequests([targetUrl]);

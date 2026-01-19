@@ -2,11 +2,15 @@
  * Router - Routes requests to handlers based on URL patterns
  */
 
-import type { CrawlingContext, Route, RouteHandler } from "./types";
+import type { CrawlingContext } from "./types";
 
-// ============================================================================
-// Types
-// ============================================================================
+export type RouteHandler = (context: CrawlingContext) => Promise<void>;
+
+export type Route = {
+  pattern: string | RegExp;
+  handler: RouteHandler;
+  label?: string;
+};
 
 export interface RouterOptions {
   defaultHandler?: RouteHandler;
@@ -18,10 +22,6 @@ interface RegisteredRoute {
   label?: string;
   priority: number;
 }
-
-// ============================================================================
-// Router Class
-// ============================================================================
 
 export class Router {
   private routes: RegisteredRoute[] = [];
@@ -207,10 +207,6 @@ export class Router {
     return new Router(options);
   }
 }
-
-// ============================================================================
-// Pattern Helpers
-// ============================================================================
 
 /**
  * Common URL patterns

@@ -1,7 +1,7 @@
 import { RequestSpec } from "caido:utils";
 
 import type { Request } from "../models/request";
-import type { ResponseData } from "../models/types";
+import { ResponseData } from "../models/types";
 import { requireSDK } from "../sdk";
 
 export type HttpClientOptions = {
@@ -145,7 +145,7 @@ export class HttpClient {
       contentType.toLowerCase().includes("text/xml") ||
       contentType.toLowerCase().includes("+xml");
 
-    return {
+    return new ResponseData({
       url: request.url,
       statusCode,
       headers: responseHeaders,
@@ -160,7 +160,7 @@ export class HttpClient {
         completedAt,
         durationMs: completedAt.getTime() - startedAt.getTime(),
       },
-    };
+    });
   }
 
   async get(url: string, options: SendOptions = {}): Promise<ResponseData> {
@@ -210,14 +210,16 @@ export class HttpClient {
   }
 }
 
+/**
+ * @deprecated Use response.isSuccess() instead
+ */
 export function isSuccessResponse(response: ResponseData): boolean {
-  return response.statusCode >= 200 && response.statusCode < 300;
+  return response.isSuccess();
 }
 
+/**
+ * @deprecated Use response.shouldRetry() instead
+ */
 export function shouldRetryResponse(response: ResponseData): boolean {
-  return (
-    response.statusCode >= 500 ||
-    response.statusCode === 429 ||
-    response.statusCode === 408
-  );
+  return response.shouldRetry();
 }

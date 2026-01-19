@@ -21,15 +21,15 @@ export default defineConfig({
   plugins: [
     {
       kind: "backend",
-      id: "backend",
+      id: "crawler-backend",
       root: "packages/backend",
     },
     {
       kind: 'frontend',
-      id: "frontend",
+      id: "crawler-frontend",
       root: 'packages/frontend',
       backend: {
-        id: "backend",
+        id: "crawler-backend",
       },
       vite: {
         plugins: [vue()],

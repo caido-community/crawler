@@ -34,11 +34,9 @@ export class ConcurrencyPool {
   private isPaused: boolean = false;
   private completedTasks: number = 0;
   private failedTasks: number = 0;
-  private totalTaskDuration: number = 0;
   private currentConcurrency: number;
   private autoscaleTimer: ReturnType<typeof setInterval> | undefined;
-  private recentDurations: number[] = [];
-  private recentSuccessRate: number = 1;
+  private taskDurations: number[] = [];
 
   constructor(options: ConcurrencyPoolOptions = {}) {
     this.options = {
@@ -166,28 +164,12 @@ export class ConcurrencyPool {
 
   private recordSuccess(duration: number): void {
     this.completedTasks++;
-    this.totalTaskDuration += duration;
-    this.recentDurations.push(duration);
-
-    if (this.recentDurations.length > 100) {
-      this.recentDurations.shift();
-    }
-
-    this.recentSuccessRate =
-      this.completedTasks / (this.completedTasks + this.failedTasks);
+    this.taskDurations.push(duration);
   }
 
   private recordFailure(duration: number): void {
     this.failedTasks++;
-    this.totalTaskDuration += duration;
-    this.recentDurations.push(duration);
-
-    if (this.recentDurations.length > 100) {
-      this.recentDurations.shift();
-    }
-
-    this.recentSuccessRate =
-      this.completedTasks / (this.completedTasks + this.failedTasks);
+    this.taskDurations.push(duration);
   }
 
   private startAutoscaling(): void {
@@ -207,21 +189,24 @@ export class ConcurrencyPool {
     const { minConcurrency, maxConcurrency } = this.options;
 
     const avgDuration =
-      this.recentDurations.length > 0
-        ? this.recentDurations.reduce((a, b) => a + b, 0) /
-          this.recentDurations.length
+      this.taskDurations.length > 0
+        ? this.taskDurations.reduce((a, b) => a + b, 0) /
+          this.taskDurations.length
         : 0;
+
+    const totalTasks = this.completedTasks + this.failedTasks;
+    const successRate = totalTasks > 0 ? this.completedTasks / totalTasks : 1;
 
     const queueLoad = this.taskQueue.length / this.currentConcurrency;
 
     let newConcurrency = this.currentConcurrency;
 
-    if (queueLoad > 2 && this.recentSuccessRate > 0.9 && avgDuration < 5000) {
+    if (queueLoad > 2 && successRate > 0.9 && avgDuration < 5000) {
       newConcurrency = Math.min(
         maxConcurrency,
         Math.ceil(this.currentConcurrency * 1.2),
       );
-    } else if (this.recentSuccessRate < 0.5 || avgDuration > 30000) {
+    } else if (successRate < 0.5 || avgDuration > 30000) {
       newConcurrency = Math.max(
         minConcurrency,
         Math.floor(this.currentConcurrency * 0.8),
@@ -244,7 +229,7 @@ export class ConcurrencyPool {
   }
 
   getStats(): PoolStats {
-    const totalTasks = this.completedTasks + this.failedTasks;
+    const totalDuration = this.taskDurations.reduce((a, b) => a + b, 0);
     return {
       currentConcurrency: this.currentConcurrency,
       desiredConcurrency: this.options.desiredConcurrency,
@@ -253,8 +238,17 @@ export class ConcurrencyPool {
       completedTasks: this.completedTasks,
       failedTasks: this.failedTasks,
       avgTaskDurationMs:
-        totalTasks > 0 ? this.totalTaskDuration / totalTasks : 0,
+        this.taskDurations.length > 0
+          ? totalDuration / this.taskDurations.length
+          : 0,
     };
+  }
+
+  /**
+   * Gets all task durations for external analysis
+   */
+  getTaskDurations(): number[] {
+    return [...this.taskDurations];
   }
 
   isActive(): boolean {

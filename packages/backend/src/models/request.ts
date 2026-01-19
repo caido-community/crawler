@@ -68,7 +68,7 @@ export class Request implements RequestData {
     const opts: RequestOptions =
       typeof options === "string" ? { url: options } : options;
 
-    this.id = generateRequestId();
+    this.id = opts.id ?? generateRequestId();
     this.url = opts.url;
     this.method = opts.method ?? "GET";
     this.headers = { ...opts.headers };
@@ -79,7 +79,7 @@ export class Request implements RequestData {
     this.priority = opts.priority ?? 0;
     this.noRetry = opts.noRetry ?? false;
     this.maxRetries = opts.maxRetries ?? 3;
-    this.createdAt = new Date();
+    this.createdAt = opts.createdAt ?? new Date();
 
     // Initialize mutable state
     this.retryCount = 0;
@@ -229,6 +229,7 @@ export class Request implements RequestData {
    */
   static fromJSON(data: RequestData): Request {
     const request = new Request({
+      id: data.id,
       url: data.url,
       method: data.method,
       headers: data.headers,
@@ -239,16 +240,15 @@ export class Request implements RequestData {
       priority: data.priority,
       maxRetries: data.maxRetries,
       noRetry: data.noRetry,
+      createdAt: new Date(data.createdAt),
     });
 
     // Restore mutable state
-    (request as { id: string }).id = data.id;
     request.retryCount = data.retryCount;
     request.state = data.state;
     request.errorMessages = [...data.errorMessages];
     request.depth = data.depth;
     request.parentRequestId = data.parentRequestId;
-    (request as { createdAt: Date }).createdAt = new Date(data.createdAt);
     request.processedAt = data.processedAt
       ? new Date(data.processedAt)
       : undefined;

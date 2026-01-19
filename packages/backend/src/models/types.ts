@@ -1,3 +1,5 @@
+import type { SessionData } from "./session";
+
 export type RequestMethod =
   | "GET"
   | "POST"
@@ -28,6 +30,8 @@ export type RequestOptions = {
   maxRetries?: number;
   noRetry?: boolean;
   skipNavigation?: boolean;
+  id?: string;
+  createdAt?: Date;
 };
 
 export type RequestData = {
@@ -51,7 +55,13 @@ export type RequestData = {
   processedAt?: Date;
 };
 
-export type ResponseData = {
+export type ResponseTiming = {
+  startedAt: Date;
+  completedAt: Date;
+  durationMs: number;
+};
+
+export type ResponseDataInit = {
   url: string;
   statusCode: number;
   headers: Record<string, string[]>;
@@ -61,137 +71,52 @@ export type ResponseData = {
   isJson: boolean;
   isXml: boolean;
   redirectChain: string[];
-  timing: {
-    startedAt: Date;
-    completedAt: Date;
-    durationMs: number;
-  };
+  timing: ResponseTiming;
 };
 
-export type UrlSource =
-  | "anchor"
-  | "form"
-  | "script"
-  | "link"
-  | "image"
-  | "iframe"
-  | "css"
-  | "meta"
-  | "sitemap"
-  | "robots"
-  | "json"
-  | "javascript";
+export class ResponseData {
+  readonly url: string;
+  readonly statusCode: number;
+  readonly headers: Record<string, string[]>;
+  readonly body: string;
+  readonly contentType: string;
+  readonly isHtml: boolean;
+  readonly isJson: boolean;
+  readonly isXml: boolean;
+  readonly redirectChain: string[];
+  readonly timing: ResponseTiming;
 
-export type ExtractedLink = {
-  url: string;
-  source: UrlSource;
-  text?: string;
-  attributes?: Record<string, string>;
-};
+  constructor(data: ResponseDataInit) {
+    this.url = data.url;
+    this.statusCode = data.statusCode;
+    this.headers = data.headers;
+    this.body = data.body;
+    this.contentType = data.contentType;
+    this.isHtml = data.isHtml;
+    this.isJson = data.isJson;
+    this.isXml = data.isXml;
+    this.redirectChain = data.redirectChain;
+    this.timing = data.timing;
+  }
 
-export type ExtractionResult = {
-  links: ExtractedLink[];
-  forms: ExtractedForm[];
-  emails: string[];
-  metadata: PageMetadata;
-};
+  /**
+   * Checks if the response indicates success (2xx status code)
+   */
+  isSuccess(): boolean {
+    return this.statusCode >= 200 && this.statusCode < 300;
+  }
 
-export type ExtractedForm = {
-  action: string;
-  method: RequestMethod;
-  inputs: FormInput[];
-  id?: string;
-  name?: string;
-};
-
-export type FormInput = {
-  name: string;
-  type: string;
-  value?: string;
-  required: boolean;
-  options?: string[];
-};
-
-export type PageMetadata = {
-  title?: string;
-  description?: string;
-  keywords?: string[];
-  canonical?: string;
-  language?: string;
-  robotsMeta?: string;
-};
-
-export type SitemapUrl = {
-  loc: string;
-  lastmod?: string;
-  changefreq?:
-    | "always"
-    | "hourly"
-    | "daily"
-    | "weekly"
-    | "monthly"
-    | "yearly"
-    | "never";
-  priority?: number;
-};
-
-export type Sitemap = {
-  urls: SitemapUrl[];
-  sitemaps: string[];
-};
-
-export type RobotsTxt = {
-  rules: RobotsRule[];
-  sitemaps: string[];
-  crawlDelay?: number;
-};
-
-export type RobotsRule = {
-  userAgent: string;
-  allow: string[];
-  disallow: string[];
-};
-
-export type SessionData = {
-  id: string;
-  cookies: Cookie[];
-  headers: Record<string, string>;
-  userData: Record<string, unknown>;
-  createdAt: Date;
-  lastUsedAt: Date;
-  usageCount: number;
-  maxUsageCount: number;
-  isBlocked: boolean;
-  errorScore: number;
-};
-
-export type Cookie = {
-  name: string;
-  value: string;
-  domain?: string;
-  path?: string;
-  expires?: Date;
-  httpOnly?: boolean;
-  secure?: boolean;
-  sameSite?: "Strict" | "Lax" | "None";
-};
-
-export type PoolOptions = {
-  maxConcurrency: number;
-  minConcurrency: number;
-  desiredConcurrency: number;
-  scaleUpStepRatio: number;
-  scaleDownStepRatio: number;
-  maybeRunIntervalMs: number;
-};
-
-export type RouteHandler = (context: CrawlingContext) => Promise<void>;
-
-export type Route = {
-  pattern: string | RegExp;
-  handler: RouteHandler;
-  label?: string;
-};
+  /**
+   * Checks if the response should trigger a retry (5xx, 429, 408)
+   */
+  shouldRetry(): boolean {
+    return (
+      this.statusCode >= 500 ||
+      this.statusCode === 429 ||
+      this.statusCode === 408
+    );
+  }
+}
 
 export type CrawlerOptions = {
   maxRequestsPerCrawl?: number;

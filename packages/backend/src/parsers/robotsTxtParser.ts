@@ -2,19 +2,11 @@
  * Robots.txt Parser - Parse and evaluate robots.txt rules
  */
 
-import type { RobotsRule, RobotsTxt } from "../models/types";
-
-// ============================================================================
-// Types
-// ============================================================================
+import type { RobotsRule, RobotsTxt } from "./types";
 
 export interface RobotsParserOptions {
   userAgent?: string;
 }
-
-// ============================================================================
-// Robots.txt Parser Class
-// ============================================================================
 
 export class RobotsTxtParser {
   private rules: RobotsRule[] = [];
@@ -350,10 +342,6 @@ export class RobotsTxtParser {
     }
   }
 }
-
-// ============================================================================
-// Factory Function
-// ============================================================================
 
 /**
  * Creates a parser and parses content in one step

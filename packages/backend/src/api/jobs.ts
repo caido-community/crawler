@@ -3,20 +3,15 @@ import type { CrawlJob, Result } from "shared";
 
 import { requireSDK } from "../sdk";
 import { CrawlerService } from "../services";
-import { jobsStore } from "../stores/jobsStore";
 
 export function startCrawl(_sdk: SDK, targetUrl: string): Result<CrawlJob> {
   const sdk = requireSDK();
 
-  // Get jobId first so we can use it in callbacks
+  // jobsStore updates are now handled internally by CrawlerService
   const result = CrawlerService.start(
     targetUrl,
     {
       onProgress: (stats, jobId) => {
-        jobsStore.updateJob(jobId, {
-          crawledUrls: stats.crawledUrls,
-          discoveredUrls: stats.discoveredUrls,
-        });
         sdk.api.send("crawl:progress", {
           jobId,
           crawled: stats.crawledUrls,
@@ -24,12 +19,6 @@ export function startCrawl(_sdk: SDK, targetUrl: string): Result<CrawlJob> {
         });
       },
       onComplete: (stats, jobId) => {
-        jobsStore.updateJob(jobId, {
-          status: "completed",
-          crawledUrls: stats.crawledUrls,
-          discoveredUrls: stats.discoveredUrls,
-          completedAt: new Date(),
-        });
         sdk.api.send("crawl:completed", {
           jobId,
           totalUrls: stats.crawledUrls,
@@ -74,7 +63,10 @@ export function pauseCrawl(_sdk: SDK, jobId: string): Result<undefined> {
 
   if (result.kind === "Ok") {
     const sdk = requireSDK();
-    sdk.api.send("job:updated", jobsStore.getJob(jobId));
+    const jobResult = CrawlerService.getJob(jobId);
+    if (jobResult.kind === "Ok") {
+      sdk.api.send("job:updated", jobResult.value);
+    }
   }
 
   return result;
@@ -85,7 +77,10 @@ export function resumeCrawl(_sdk: SDK, jobId: string): Result<undefined> {
 
   if (result.kind === "Ok") {
     const sdk = requireSDK();
-    sdk.api.send("job:updated", jobsStore.getJob(jobId));
+    const jobResult = CrawlerService.getJob(jobId);
+    if (jobResult.kind === "Ok") {
+      sdk.api.send("job:updated", jobResult.value);
+    }
   }
 
   return result;

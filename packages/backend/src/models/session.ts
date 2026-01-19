@@ -2,11 +2,29 @@
  * Session - Manages cookies and headers for a crawl session
  */
 
-import type { Cookie, SessionData } from "./types";
+export type Cookie = {
+  name: string;
+  value: string;
+  domain?: string;
+  path?: string;
+  expires?: Date;
+  httpOnly?: boolean;
+  secure?: boolean;
+  sameSite?: "Strict" | "Lax" | "None";
+};
 
-// ============================================================================
-// Session Class
-// ============================================================================
+export type SessionData = {
+  id: string;
+  cookies: Cookie[];
+  headers: Record<string, string>;
+  userData: Record<string, unknown>;
+  createdAt: Date;
+  lastUsedAt: Date;
+  usageCount: number;
+  maxUsageCount: number;
+  isBlocked: boolean;
+  errorScore: number;
+};
 
 let sessionCounter = 0;
 
