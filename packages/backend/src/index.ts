@@ -35,6 +35,44 @@ export type API = DefineAPI<{
 
 export type { BackendEvents };
 export type { CrawlConfig, CrawlJob, CrawlJobStatus, Result } from "shared";
+export * from "./errors";
+export * from "./models";
+export {
+  AutoCrawlService,
+  CrawlerService,
+  CRAWLER_DEFAULTS,
+  HttpCrawler,
+  StatsTracker,
+} from "./services";
+export * from "./stores";
+export * from "./utils";
+export * from "./validation/schemas";
+
+// Export events explicitly to avoid CrawlerEvent conflict with models
+export { EventBus } from "./events";
+export type {
+  ConfigUpdatedEvent,
+  CrawlerAbortedEvent,
+  CrawlerCompletedEvent,
+  CrawlerPausedEvent,
+  CrawlerResumedEvent,
+  CrawlerStartedEvent,
+  EventHandler,
+  EventPayload,
+  EventType,
+  JobCreatedEvent,
+  JobDeletedEvent,
+  JobUpdatedEvent,
+  RequestCompletedEvent,
+  RequestFailedEvent,
+  RequestQueuedEvent,
+} from "./events";
+export type { CrawlerEvent as DomainCrawlerEvent } from "./events";
+
+// Export utility types
+export type { HtmlExtractorOptions } from "./parsers/htmlExtractor";
+export type { RobotsParserOptions } from "./parsers/robotsTxtParser";
+export type { HttpClientOptions, SendOptions } from "./repositories/httpClient";
 
 export function init(sdk: BackendSDK) {
   setSDK(sdk);

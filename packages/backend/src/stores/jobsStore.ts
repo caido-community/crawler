@@ -2,13 +2,14 @@ import type { CrawlJob } from "shared";
 
 import { requireSDK } from "../sdk";
 
+import type { IJobsStore } from "./interfaces";
 import { ProjectScopedStore } from "./projectStore";
 
 type JobsData = {
   jobs: CrawlJob[];
 };
 
-class JobsStore extends ProjectScopedStore<JobsData> {
+class JobsStore extends ProjectScopedStore<JobsData> implements IJobsStore {
   constructor() {
     super("crawler-jobs");
   }

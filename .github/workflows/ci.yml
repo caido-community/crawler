@@ -48,3 +48,20 @@ jobs:
 
       - name: Run typecheck
         run: pnpm typecheck
+
+  test:
+    name: "Test"
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install mise
+        uses: jdx/mise-action@v2
+
+      - name: Install dependencies
+        run: pnpm install
+
+      - name: Run tests
+        run: pnpm test

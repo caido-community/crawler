@@ -72,6 +72,23 @@ describe("HtmlExtractor", () => {
       );
     });
 
+    it("handles unquoted and mixed quote attributes", () => {
+      const extractor = new HtmlExtractor({ baseUrl: "https://example.com" });
+      const html = `
+        <a href=page1>Unquoted</a>
+        <a href='page2'>Single Quoted</a>
+        <a href="page3">Double Quoted</a>
+      `;
+      const response = createHtmlResponse(html);
+
+      const result = extractor.extract(response);
+      const urls = result.links.map((l) => l.url);
+
+      expect(urls).toContain("https://example.com/page1");
+      expect(urls).toContain("https://example.com/page2");
+      expect(urls).toContain("https://example.com/page3");
+    });
+
     it("extracts anchor text", () => {
       const extractor = new HtmlExtractor({ baseUrl: "https://example.com" });
       const html = '<a href="/page">Click Here</a>';

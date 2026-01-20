@@ -10,6 +10,7 @@
     "@caido/sdk-backend": "0.55.0-beta.0"
   },
   "dependencies": {
-    "shared": "workspace:*"
+    "shared": "workspace:*",
+    "zod": "^4.3.5"
   }
 }

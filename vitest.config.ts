@@ -8,7 +8,15 @@ export default defineConfig({
     coverage: {
       provider: "v8",
       reporter: ["text", "json", "html"],
-      include: ["packages/backend/src/models/**", "packages/backend/src/parsers/**"],
+      include: [
+        "packages/backend/src/models/**",
+        "packages/backend/src/parsers/**",
+        "packages/backend/src/services/**",
+        "packages/backend/src/stores/**",
+        "packages/backend/src/repositories/**",
+        "packages/backend/src/api/**",
+      ],
+      exclude: ["**/*.test.ts", "**/index.ts"],
     },
   },
 });

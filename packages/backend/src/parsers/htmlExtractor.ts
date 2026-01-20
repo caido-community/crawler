@@ -16,31 +16,34 @@ import type {
 
 const PATTERNS = {
   // Standard HTML elements
-  anchor: /<a\s+[^>]*href\s*=\s*["']([^"']+)["'][^>]*>/gi,
-  anchorWithText: /<a\s+[^>]*href\s*=\s*["']([^"']+)["'][^>]*>([^<]*)</gi,
-  form: /<form\s+[^>]*action\s*=\s*["']([^"']+)["'][^>]*>/gi,
-  formFull: /<form\s+([^>]*)>([\s\S]*?)<\/form>/gi,
-  script: /<script\s+[^>]*src\s*=\s*["']([^"']+)["'][^>]*>/gi,
-  link: /<link\s+[^>]*href\s*=\s*["']([^"']+)["'][^>]*>/gi,
-  img: /<img\s+[^>]*src\s*=\s*["']([^"']+)["'][^>]*>/gi,
-  imgSrcset: /<img\s+[^>]*srcset\s*=\s*["']([^"']+)["'][^>]*>/gi,
-  iframe: /<iframe\s+[^>]*src\s*=\s*["']([^"']+)["'][^>]*>/gi,
-  video: /<video\s+[^>]*src\s*=\s*["']([^"']+)["'][^>]*>/gi,
-  audio: /<audio\s+[^>]*src\s*=\s*["']([^"']+)["'][^>]*>/gi,
-  source: /<source\s+[^>]*src\s*=\s*["']([^"']+)["'][^>]*>/gi,
-  embed: /<embed\s+[^>]*src\s*=\s*["']([^"']+)["'][^>]*>/gi,
-  object: /<object\s+[^>]*data\s*=\s*["']([^"']+)["'][^>]*>/gi,
-  area: /<area\s+[^>]*href\s*=\s*["']([^"']+)["'][^>]*>/gi,
-  base: /<base\s+[^>]*href\s*=\s*["']([^"']+)["'][^>]*>/i,
+  // Supports quoted ("value" or 'value') and unquoted (value) attributes
+  // Capture groups: 1=double-quoted, 2=single-quoted, 3=unquoted
+  anchor: /<a\s+[^>]*href\s*=\s*(?:"([^"]*)"|'([^']*)'|([^>\s]+))[^>]*>/gi,
+  anchorWithText:
+    /<a\s+[^>]*href\s*=\s*(?:"([^"]*)"|'([^']*)'|([^>\s]+))[^>]*>([\s\S]*?)<\/a>/gi,
+  form: /<form\s+[^>]*action\s*=\s*(?:"([^"]*)"|'([^']*)'|([^>\s]+))[^>]*>/gi,
+  formFull: /<form\s+([^>]*)>([\s\S]*?)<\/form>/gi, // Attributes handled by sub-parser
+  script: /<script\s+[^>]*src\s*=\s*(?:"([^"]*)"|'([^']*)'|([^>\s]+))[^>]*>/gi,
+  link: /<link\s+[^>]*href\s*=\s*(?:"([^"]*)"|'([^']*)'|([^>\s]+))[^>]*>/gi,
+  img: /<img\s+[^>]*src\s*=\s*(?:"([^"]*)"|'([^']*)'|([^>\s]+))[^>]*>/gi,
+  imgSrcset: /<img\s+[^>]*srcset\s*=\s*["']([^"']+)["'][^>]*>/gi, // srcset usually quoted
+  iframe: /<iframe\s+[^>]*src\s*=\s*(?:"([^"]*)"|'([^']*)'|([^>\s]+))[^>]*>/gi,
+  video: /<video\s+[^>]*src\s*=\s*(?:"([^"]*)"|'([^']*)'|([^>\s]+))[^>]*>/gi,
+  audio: /<audio\s+[^>]*src\s*=\s*(?:"([^"]*)"|'([^']*)'|([^>\s]+))[^>]*>/gi,
+  source: /<source\s+[^>]*src\s*=\s*(?:"([^"]*)"|'([^']*)'|([^>\s]+))[^>]*>/gi,
+  embed: /<embed\s+[^>]*src\s*=\s*(?:"([^"]*)"|'([^']*)'|([^>\s]+))[^>]*>/gi,
+  object: /<object\s+[^>]*data\s*=\s*(?:"([^"]*)"|'([^']*)'|([^>\s]+))[^>]*>/gi,
+  area: /<area\s+[^>]*href\s*=\s*(?:"([^"]*)"|'([^']*)'|([^>\s]+))[^>]*>/gi,
+  base: /<base\s+[^>]*href\s*=\s*(?:"([^"]*)"|'([^']*)'|([^>\s]+))[^>]*>/i,
 
   // Meta and redirects
   metaRefresh:
     /<meta\s+[^>]*content\s*=\s*["'][^"']*url\s*=\s*([^"'\s>]+)["'][^>]*>/gi,
   metaCanonical:
-    /<link\s+[^>]*rel\s*=\s*["']canonical["'][^>]*href\s*=\s*["']([^"']+)["'][^>]*>/gi,
+    /<link\s+[^>]*rel\s*=\s*["']canonical["'][^>]*href\s*=\s*(?:"([^"]*)"|'([^']*)'|([^>\s]+))[^>]*>/gi,
 
   // CSS and inline styles
-  cssUrl: /url\s*\(\s*["']?([^"')]+)["']?\s*\)/gi,
+  cssUrl: /url\s*\(\s*(?:["']?([^"')]+)["']?)\s*\)/gi,
   cssImport: /@import\s+["']([^"']+)["']/gi,
   styleBlock: /<style[^>]*>([\s\S]*?)<\/style>/gi,
 
@@ -51,13 +54,14 @@ const PATTERNS = {
 
   // Data attributes
   dataUrl:
-    /data-(?:url|src|href|link|image|background)\s*=\s*["']([^"']+)["']/gi,
+    /data-(?:url|src|href|link|image|background)\s*=\s*(?:"([^"]*)"|'([^']*)'|([^>\s]+))/gi,
 
   // Input elements
   inputElement: /<input\s+([^>]*)>/gi,
   selectElement: /<select\s+([^>]*)>([\s\S]*?)<\/select>/gi,
   textareaElement: /<textarea\s+([^>]*)>/gi,
-  optionElement: /<option\s+[^>]*value\s*=\s*["']([^"']*)["'][^>]*>/gi,
+  optionElement:
+    /<option\s+[^>]*value\s*=\s*(?:"([^"]*)"|'([^']*)'|([^>\s]+))[^>]*>/gi,
 
   // Metadata
   title: /<title[^>]*>([^<]+)<\/title>/i,
@@ -213,8 +217,8 @@ export class HtmlExtractor extends BaseExtractor {
 
     let match = regex.exec(html);
     while (match !== null) {
-      const url = match[1];
-      const text = match[2];
+      const url = match[1] ?? match[2] ?? match[3];
+      const text = match[4];
       if (url !== undefined) {
         const normalized = this.normalizeUrl(url);
         if (normalized !== undefined) {
@@ -520,9 +524,16 @@ export class HtmlExtractor extends BaseExtractor {
   }
 
   private extractAttribute(attrs: string, name: string): string | undefined {
-    const regex = new RegExp(`${name}\\s*=\\s*["']([^"']*)["']`, "i");
+    // Supports quoted ("value" or 'value') and unquoted (value) attributes
+    const regex = new RegExp(
+      `${name}\\s*=\\s*(?:"([^"]*)"|'([^']*)'|([^\\s"']+))`,
+      "i",
+    );
     const match = regex.exec(attrs);
-    return match !== null ? match[1] : undefined;
+    if (match === null) {
+      return undefined;
+    }
+    return match[1] ?? match[2] ?? match[3];
   }
 
   private extractEmails(html: string): string[] {

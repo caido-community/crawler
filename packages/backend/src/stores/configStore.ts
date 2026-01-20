@@ -2,9 +2,13 @@ import { type CrawlConfig, CrawlConfigSchema, DEFAULT_CONFIG } from "shared";
 
 import { requireSDK } from "../sdk";
 
+import type { IConfigStore } from "./interfaces";
 import { ProjectScopedStore } from "./projectStore";
 
-class ConfigStore extends ProjectScopedStore<CrawlConfig> {
+class ConfigStore
+  extends ProjectScopedStore<CrawlConfig>
+  implements IConfigStore
+{
   constructor() {
     super("crawler-config");
   }

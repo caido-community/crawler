@@ -146,7 +146,7 @@ export class HttpClient {
       contentType.toLowerCase().includes("+xml");
 
     return new ResponseData({
-      url: request.url,
+      url: result.request.getUrl() ?? request.url,
       statusCode,
       headers: responseHeaders,
       body,

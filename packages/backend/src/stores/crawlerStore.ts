@@ -5,34 +5,20 @@
  * This maintains proper architectural layering where stores don't depend on services.
  */
 
-/**
- * Interface for crawler instances stored in the store.
- * Matches the HttpCrawler class from services/crawler.ts
- */
-interface StoredCrawler {
-  getState(): { status: string };
-  getStatistics(): {
-    requestsFinished: number;
-    requestsFailed: number;
-    requestsTotal: number;
-  };
-  pause(): void;
-  resume(): void;
-  abort(): void;
-}
+import type { ICrawlerStore, IStoredCrawler } from "./interfaces";
 
-class CrawlerStoreClass {
-  private activeCrawlers: Map<string, StoredCrawler> = new Map();
+class CrawlerStoreClass implements ICrawlerStore {
+  private activeCrawlers: Map<string, IStoredCrawler> = new Map();
 
-  get(jobId: string): StoredCrawler | undefined {
+  get(jobId: string): IStoredCrawler | undefined {
     return this.activeCrawlers.get(jobId);
   }
 
-  getAll(): StoredCrawler[] {
+  getAll(): IStoredCrawler[] {
     return Array.from(this.activeCrawlers.values());
   }
 
-  register(jobId: string, crawler: StoredCrawler): void {
+  register(jobId: string, crawler: IStoredCrawler): void {
     this.activeCrawlers.set(jobId, crawler);
   }
 
