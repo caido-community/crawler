@@ -15,11 +15,6 @@ export class CrawlerError extends Error {
   constructor(message: string) {
     super(message);
     this.name = "CrawlerError";
-    // Maintain proper stack trace in V8 environments
-    const ErrorWithCapture = Error as unknown as {
-      captureStackTrace?: (target: Error, constructor: NewableFunction) => void;
-    };
-    ErrorWithCapture.captureStackTrace?.(this, this.constructor);
   }
 }
 

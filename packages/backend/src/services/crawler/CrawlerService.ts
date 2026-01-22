@@ -5,7 +5,6 @@
 
 import type { CrawlConfig, CrawlJob, CrawlJobStatus, Result } from "shared";
 
-import { type Request } from "../../models";
 import { configStore } from "../../stores/configStore";
 import { crawlerStore } from "../../stores/crawlerStore";
 import { jobsStore } from "../../stores/jobsStore";
@@ -111,10 +110,7 @@ class CrawlerServiceClass {
     // Set up event handlers
     crawler.on("requestCompleted", (event) => {
       lastActivityAt = new Date();
-      const { request, response } = event.data as {
-        request: Request;
-        response: { statusCode: number };
-      };
+      const { request, response } = event.data;
       const stats = getStats();
       jobsStore.updateJob(jobId, {
         crawledUrls: stats.crawledUrls,
@@ -131,10 +127,7 @@ class CrawlerServiceClass {
 
     crawler.on("requestFailed", (event) => {
       lastActivityAt = new Date();
-      const { request, error } = event.data as {
-        request: Request;
-        error: Error;
-      };
+      const { request, error } = event.data;
       callbacks.onError?.(request.url, error.message);
     });
 

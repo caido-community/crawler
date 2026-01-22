@@ -1,6 +1,6 @@
 import { RequestSpec } from "caido:utils";
 
-import type { Request } from "../models/request";
+import { Request } from "../models/request";
 import { ResponseData } from "../models/types";
 import { requireSDK } from "../sdk";
 
@@ -164,24 +164,14 @@ export class HttpClient {
   }
 
   async get(url: string, options: SendOptions = {}): Promise<ResponseData> {
-    const request = {
-      id: "",
+    const request = new Request({
       url,
-      method: "GET" as const,
-      headers: {},
-      userData: {},
-      uniqueKey: url,
-      priority: 0,
-      retryCount: 0,
-      maxRetries: 0,
+      method: "GET",
       noRetry: true,
-      state: "pending" as const,
-      errorMessages: [],
-      depth: 0,
-      createdAt: new Date(),
-    };
+      maxRetries: 0,
+    });
 
-    return this.send(request as unknown as Request, options);
+    return this.send(request, options);
   }
 
   isInScope(url: string): boolean {
@@ -208,18 +198,4 @@ export class HttpClient {
   getOptions(): HttpClientOptions {
     return { ...this.options };
   }
-}
-
-/**
- * @deprecated Use response.isSuccess() instead
- */
-export function isSuccessResponse(response: ResponseData): boolean {
-  return response.isSuccess();
-}
-
-/**
- * @deprecated Use response.shouldRetry() instead
- */
-export function shouldRetryResponse(response: ResponseData): boolean {
-  return response.shouldRetry();
 }

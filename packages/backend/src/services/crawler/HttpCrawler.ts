@@ -19,11 +19,7 @@ import {
 } from "../../models";
 import type { Session } from "../../models/session";
 import { CompositeExtractor, HtmlExtractor } from "../../parsers";
-import {
-  HttpClient,
-  isSuccessResponse,
-  shouldRetryResponse,
-} from "../../repositories";
+import { HttpClient } from "../../repositories";
 
 import { CRAWLER_DEFAULTS } from "./constants";
 import { filterLinksByStrategy, getDomain } from "./linkProcessor";
@@ -385,7 +381,7 @@ export class HttpCrawler implements CrawlerInterface {
       this.statsTracker.recordResponseTiming(response);
 
       // Handle retryable responses
-      if (shouldRetryResponse(response) && request.canRetry()) {
+      if (response.shouldRetry() && request.canRetry()) {
         request.markFailed(`HTTP ${response.statusCode}`);
         this.queue.handleRequestFailure(request, `HTTP ${response.statusCode}`);
         this.state.requestsRetried++;
@@ -499,7 +495,7 @@ export class HttpCrawler implements CrawlerInterface {
     response: ResponseData,
     options: EnqueueLinksOptions,
   ): number {
-    if (!isSuccessResponse(response)) {
+    if (!response.isSuccess()) {
       return 0;
     }
 
