@@ -1,0 +1,13 @@
+{
+  "name": "shared",
+  "version": "0.0.0",
+  "type": "module",
+  "types": "src/index.ts",
+  "main": "src/index.ts",
+  "scripts": {
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "zod": "^4.1.12"
+  }
+}
