@@ -1,6 +1,6 @@
 import type { CrawlJob, CrawlJobAgentStatus } from "@/types";
 
-export type CrawlJobStatus = CrawlJob["status"];
+type CrawlJobStatus = CrawlJob["status"];
 
 export function getStatusColor(status: CrawlJobStatus): string {
   switch (status) {

@@ -19,7 +19,9 @@ useSettings();
       <template #content>
         <div class="flex justify-between items-center p-4">
           <div>
-            <h3 class="text-lg font-semibold text-surface-200">Settings</h3>
+            <h3 class="text-lg font-semibold text-surface-200">
+              Crawler Settings
+            </h3>
             <p class="text-sm text-surface-400">
               Configure crawler behavior, limits, and auto-crawl options.
             </p>

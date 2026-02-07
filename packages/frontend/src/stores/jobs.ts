@@ -159,6 +159,21 @@ export const useJobsStore = defineStore("jobs", () => {
     }
   };
 
+  const clearAllJobs = async () => {
+    try {
+      const result = await sdk.backend.clearAllJobs();
+      if (result.kind === "Ok") {
+        jobs.value = [];
+        selectedJobId.value = undefined;
+        sdk.window.showToast("All crawl jobs deleted", { variant: "success" });
+      } else {
+        sdk.window.showToast(result.error, { variant: "error" });
+      }
+    } catch (error) {
+      sdk.window.showToast("Failed to delete all jobs", { variant: "error" });
+    }
+  };
+
   const updateJobProgress = (
     jobId: string,
     crawled: number,
@@ -212,6 +227,7 @@ export const useJobsStore = defineStore("jobs", () => {
     resumeCrawl,
     deleteJob,
     clearCompletedJobs,
+    clearAllJobs,
     updateJobProgress,
     markJobCompleted,
     setSelectedJob,

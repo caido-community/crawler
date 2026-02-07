@@ -11,7 +11,11 @@ const handleUpdateConfig = async <K extends keyof typeof configStore.config>(
   key: K,
   value: (typeof configStore.config)[K],
 ) => {
-  await configStore.updateConfig({ [key]: value });
+  const updates: Partial<typeof configStore.config> = { [key]: value };
+  if (key === "enabled" && value === true) {
+    updates.crawlInScopeOnly = true;
+  }
+  await configStore.updateConfig(updates);
 };
 
 const handleUserAgentBlur = (event: Event) => {

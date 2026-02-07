@@ -84,12 +84,9 @@ export function useDashboardCrawlEvents() {
     sdk.backend.onEvent("job:updated", () => {
       jobsStore.loadJobs();
     });
-    sdk.backend.onEvent("job:created", async () => {
+    sdk.backend.onEvent("job:created", async (job: { id: string }) => {
       await jobsStore.loadJobs();
-      const list = jobsStore.jobs;
-      if (list.length === 1) {
-        jobsStore.setSelectedJob(list[0]?.id);
-      }
+      jobsStore.setSelectedJob(job.id);
     });
     sdk.backend.onEvent("job:deleted", (jobId: string) => {
       if (jobsStore.selectedJobId === jobId) {

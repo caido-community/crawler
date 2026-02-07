@@ -2,8 +2,6 @@ import { configStore } from "../stores/configStore";
 import { jobsStore } from "../stores/jobsStore";
 import type { BackendSDK, InterceptedRequest } from "../types";
 
-// jobsStore is still used for checking existing jobs, but updates are handled by CrawlerService
-
 import { CrawlerService } from "./crawler";
 
 class AutoCrawlServiceClass {
@@ -71,8 +69,8 @@ class AutoCrawlServiceClass {
       onProgress: (stats, jobId) => {
         sdk.api.send("crawl:progress", {
           jobId,
-          crawledUrls: stats.crawledUrls,
-          discoveredUrls: stats.discoveredUrls,
+          crawled: stats.crawledUrls,
+          discovered: stats.discoveredUrls,
         });
       },
       onComplete: (stats, jobId) => {
@@ -83,11 +81,9 @@ class AutoCrawlServiceClass {
       },
     }).then((result) => {
       if (result.kind === "Ok") {
-        sdk.api.send("crawl:started", {
-          jobId: result.value.jobId,
-          host: result.value.job.host,
-          targetUrl: result.value.job.targetUrl,
-        });
+        const { job, jobId } = result.value;
+        sdk.api.send("job:created", job);
+        sdk.api.send("crawl:started", { jobId, host: job.host });
       }
     });
   }

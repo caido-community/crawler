@@ -68,7 +68,6 @@ export * from "./stores";
 export * from "./utils";
 export * from "./validation/schemas";
 
-// Export events explicitly to avoid CrawlerEvent conflict with models
 export { EventBus } from "./events";
 export type {
   ConfigUpdatedEvent,
@@ -89,7 +88,6 @@ export type {
 } from "./events";
 export type { CrawlerEvent as DomainCrawlerEvent } from "./events";
 
-// Export utility types
 export type { HtmlExtractorOptions } from "./parsers/htmlExtractor";
 export type { RobotsParserOptions } from "./parsers/robotsTxtParser";
 export type { HttpClientOptions, SendOptions } from "./repositories/httpClient";

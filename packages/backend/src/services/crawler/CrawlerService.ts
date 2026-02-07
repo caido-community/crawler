@@ -204,7 +204,9 @@ class CrawlerServiceClass {
     crawler.addRequests(seedUrls);
     crawlerStore.register(jobId, crawler);
 
-    const agentCount = isManual ? config.manualCrawlAgents : undefined;
+    const agentCount = isManual
+      ? config.manualCrawlAgents
+      : CRAWLER_DEFAULTS.MAX_CONCURRENCY;
     const job: CrawlJob = {
       id: jobId,
       targetUrl,

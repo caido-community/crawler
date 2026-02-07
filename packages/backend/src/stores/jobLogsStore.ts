@@ -11,7 +11,7 @@ type LogEntry = {
   level?: string;
 };
 
-export type JobLogEntry = { line: string; level: string };
+type JobLogEntry = { line: string; level: string };
 
 type JobLogsData = {
   logs: Record<string, LogEntry[]>;

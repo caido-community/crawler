@@ -1,4 +1,4 @@
-export type LogLevel = "info" | "success" | "warning" | "error";
+type LogLevel = "info" | "success" | "warning" | "error";
 
 const LOG_LEVELS: LogLevel[] = ["info", "success", "warning", "error"];
 
@@ -6,7 +6,7 @@ function isLogLevel(s: string): s is LogLevel {
   return LOG_LEVELS.includes(s as LogLevel);
 }
 
-export function normalizeLogLevel(level: string | undefined): LogLevel {
+function normalizeLogLevel(level: string | undefined): LogLevel {
   if (level !== undefined && isLogLevel(level)) return level;
   return "info";
 }

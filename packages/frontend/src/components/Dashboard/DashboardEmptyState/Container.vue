@@ -4,11 +4,8 @@
   >
     <i class="fas fa-spider text-5xl text-surface-600" />
     <p class="text-sm font-medium text-surface-400 text-center max-w-sm">
-      No crawl sessions yet. Right-click a request in HTTP history and choose
+      No crawl jobs yet. Right-click a request in HTTP history and choose
       <span class="text-surface-300">Crawl Host</span> to start.
-    </p>
-    <p class="text-xs text-surface-500 text-center">
-      Sessions will appear here with status, progress, and logs.
     </p>
   </div>
 </template>

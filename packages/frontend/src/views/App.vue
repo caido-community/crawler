@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import Button from "primevue/button";
+import ConfirmDialog from "primevue/confirmdialog";
 import MenuBar from "primevue/menubar";
 
 import { useAppNavigation } from "@/composables/useAppNavigation";
@@ -9,6 +10,7 @@ const { navItems, component } = useAppNavigation();
 
 <template>
   <div class="h-full flex flex-col gap-1">
+    <ConfirmDialog />
     <MenuBar class="h-12 gap-2" :model="navItems">
       <template #start>
         <div class="px-2 font-bold text-gray-300">Crawler</div>

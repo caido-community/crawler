@@ -64,15 +64,10 @@ export const useConfigStore = defineStore("config", () => {
     }
   };
 
-  const toggleEnabled = async () => {
-    await updateConfig({ enabled: !config.value.enabled });
-  };
-
   return {
     config,
     loading,
     loadConfig,
     updateConfig,
-    toggleEnabled,
   };
 });
