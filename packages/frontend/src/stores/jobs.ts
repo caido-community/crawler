@@ -2,12 +2,13 @@ import { defineStore } from "pinia";
 import { computed, ref } from "vue";
 
 import { useSDK } from "@/plugins/sdk";
-import type { CrawlJob } from "@/types";
+import type { CrawlJob, CrawlJobAgent } from "@/types";
 
 export const useJobsStore = defineStore("jobs", () => {
   const sdk = useSDK();
   const jobs = ref<CrawlJob[]>([]);
   const loading = ref(false);
+  const selectedJobId = ref<string | undefined>();
 
   const activeJobs = computed(() =>
     jobs.value.filter((j) => j.status === "running" || j.status === "paused"),
@@ -33,9 +34,13 @@ export const useJobsStore = defineStore("jobs", () => {
 
   const startCrawl = async (targetUrl: string) => {
     try {
+      const hadNoJobs = jobs.value.length === 0;
       const result = await sdk.backend.startCrawl(targetUrl);
       if (result.kind === "Ok") {
         jobs.value.unshift(result.value);
+        if (hadNoJobs) {
+          selectedJobId.value = result.value.id;
+        }
         sdk.window.showToast(`Started crawling ${result.value.host}`, {
           variant: "success",
         });
@@ -56,7 +61,7 @@ export const useJobsStore = defineStore("jobs", () => {
       if (result.kind === "Ok") {
         const job = jobs.value.find((j) => j.id === jobId);
         if (job !== undefined) {
-          job.status = "completed";
+          job.status = "cancelled";
           job.completedAt = new Date();
         }
         sdk.window.showToast("Crawl stopped", { variant: "success" });
@@ -97,6 +102,33 @@ export const useJobsStore = defineStore("jobs", () => {
       }
     } catch (error) {
       sdk.window.showToast("Failed to resume crawl", { variant: "error" });
+    }
+  };
+
+  const getJobAgents = async (jobId: string): Promise<CrawlJobAgent[]> => {
+    const result = await sdk.backend.getJobAgents(jobId);
+    if (result.kind === "Ok") return result.value;
+    return [];
+  };
+
+  const pauseAgent = async (jobId: string, agentId: number) => {
+    const result = await sdk.backend.pauseAgent(jobId, agentId);
+    if (result.kind === "Error") {
+      sdk.window.showToast(result.error, { variant: "error" });
+    }
+  };
+
+  const resumeAgent = async (jobId: string, agentId: number) => {
+    const result = await sdk.backend.resumeAgent(jobId, agentId);
+    if (result.kind === "Error") {
+      sdk.window.showToast(result.error, { variant: "error" });
+    }
+  };
+
+  const stopAgent = async (jobId: string, agentId: number) => {
+    const result = await sdk.backend.stopAgent(jobId, agentId);
+    if (result.kind === "Error") {
+      sdk.window.showToast(result.error, { variant: "error" });
     }
   };
 
@@ -147,9 +179,30 @@ export const useJobsStore = defineStore("jobs", () => {
     }
   };
 
+  const setSelectedJob = (jobId: string | undefined) => {
+    selectedJobId.value = jobId;
+  };
+
+  const updateJobTitle = async (jobId: string, title: string) => {
+    const result = await sdk.backend.updateJob(jobId, { title });
+    if (result.kind === "Ok") {
+      const job = jobs.value.find((j) => j.id === jobId);
+      if (job !== undefined) {
+        job.title = title;
+      }
+    }
+  };
+
+  const selectedJob = computed(() => {
+    const id = selectedJobId.value;
+    return id !== undefined ? jobs.value.find((j) => j.id === id) : undefined;
+  });
+
   return {
     jobs,
     loading,
+    selectedJobId,
+    selectedJob,
     activeJobs,
     completedJobs,
     loadJobs,
@@ -161,5 +214,11 @@ export const useJobsStore = defineStore("jobs", () => {
     clearCompletedJobs,
     updateJobProgress,
     markJobCompleted,
+    setSelectedJob,
+    updateJobTitle,
+    getJobAgents,
+    pauseAgent,
+    resumeAgent,
+    stopAgent,
   };
 });

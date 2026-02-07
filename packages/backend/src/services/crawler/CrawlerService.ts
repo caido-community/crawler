@@ -3,12 +3,20 @@
  * Provides start, stop, pause, resume, and job management operations.
  */
 
-import type { CrawlConfig, CrawlJob, CrawlJobStatus, Result } from "shared";
+import type {
+  CrawlConfig,
+  CrawlJob,
+  CrawlJobAgent,
+  CrawlJobAgentStatus,
+  CrawlJobStatus,
+  Result,
+} from "shared";
 
 import { getSeedUrlsFromHistory } from "../../repositories";
 import { requireSDK } from "../../sdk";
 import { configStore } from "../../stores/configStore";
 import { crawlerStore } from "../../stores/crawlerStore";
+import { jobLogsStore } from "../../stores/jobLogsStore";
 import { jobsStore } from "../../stores/jobsStore";
 
 import { CRAWLER_DEFAULTS } from "./constants";
@@ -80,14 +88,6 @@ class CrawlerServiceClass {
       return { kind: "Error", error: "Invalid URL provided." };
     }
 
-    const existingJob = jobsStore.getJobByHost(host);
-    if (existingJob !== undefined) {
-      return {
-        kind: "Error",
-        error: `A crawl job is already running for ${host}.`,
-      };
-    }
-
     const config = configStore.getConfig();
     const jobId = generateJobId();
     const options = mapConfigToOptions(config, isManual);
@@ -120,12 +120,13 @@ class CrawlerServiceClass {
 
     crawler.on("requestCompleted", (event) => {
       lastActivityAt = new Date();
-      const { request, response } = event.data;
+      const { request, response, slotId } = event.data;
       const stats = getStats();
       jobsStore.updateJob(jobId, {
         crawledUrls: stats.crawledUrls,
         discoveredUrls: stats.discoveredUrls,
       });
+      logLine(`Crawled ${response.statusCode} ${request.url}`, slotId, "info");
       callbacks.onUrlCrawled?.(request.url, response.statusCode);
       callbacks.onProgress?.(stats, jobId);
     });
@@ -137,7 +138,8 @@ class CrawlerServiceClass {
 
     crawler.on("requestFailed", (event) => {
       lastActivityAt = new Date();
-      const { request, error } = event.data;
+      const { request, error, slotId } = event.data;
+      logLine(`Failed ${request.url}: ${error.message}`, slotId, "error");
       callbacks.onError?.(request.url, error.message);
     });
 
@@ -145,6 +147,11 @@ class CrawlerServiceClass {
       if (status === "running") {
         status = "completed";
         const stats = getStats();
+        logLine(
+          `Crawl completed. ${stats.crawledUrls} URLs crawled.`,
+          undefined,
+          "success",
+        );
         jobsStore.updateJob(jobId, {
           status: "completed",
           crawledUrls: stats.crawledUrls,
@@ -156,20 +163,29 @@ class CrawlerServiceClass {
     });
 
     crawler.on("crawlerAborted", () => {
-      status = "completed";
       const stats = getStats();
-      jobsStore.updateJob(jobId, {
-        status: "completed",
-        crawledUrls: stats.crawledUrls,
-        discoveredUrls: stats.discoveredUrls,
-        completedAt: new Date(),
-      });
+      logLine(
+        `Crawl stopped. ${stats.crawledUrls} URLs crawled.`,
+        undefined,
+        "warning",
+      );
+      const job = jobsStore.getJob(jobId);
+      if (job?.status !== "cancelled") {
+        status = "completed";
+        jobsStore.updateJob(jobId, {
+          status: "completed",
+          crawledUrls: stats.crawledUrls,
+          discoveredUrls: stats.discoveredUrls,
+          completedAt: new Date(),
+        });
+      }
       callbacks.onComplete?.(stats, jobId);
     });
 
     crawler.addRequests(seedUrls);
     crawlerStore.register(jobId, crawler);
 
+    const agentCount = isManual ? config.manualCrawlAgents : undefined;
     const job: CrawlJob = {
       id: jobId,
       targetUrl,
@@ -180,7 +196,19 @@ class CrawlerServiceClass {
       crawledUrls: 0,
       startedAt,
       completedAt: undefined,
+      agentCount,
     };
+
+    const sdk = requireSDK();
+    const logLine = (
+      line: string,
+      agentId?: number,
+      level: string = "info",
+    ): void => {
+      jobLogsStore.append(jobId, line, agentId, level);
+      sdk.api.send("crawl:log", { jobId, line, agentId, level });
+    };
+    logLine(`Crawl started for ${host} with ${seedUrls.length} seed URL(s).`);
 
     jobsStore.addJob(job);
 
@@ -209,7 +237,7 @@ class CrawlerServiceClass {
       const job = jobsStore.getJob(jobId);
       if (job !== undefined) {
         jobsStore.updateJob(jobId, {
-          status: "completed",
+          status: "cancelled",
           completedAt: new Date(),
         });
         return { kind: "Ok", value: { totalUrls: job.crawledUrls } };
@@ -221,7 +249,7 @@ class CrawlerServiceClass {
     const stats = crawler.getStatistics();
 
     jobsStore.updateJob(jobId, {
-      status: "completed",
+      status: "cancelled",
       completedAt: new Date(),
     });
     crawlerStore.unregister(jobId);
@@ -260,6 +288,88 @@ class CrawlerServiceClass {
     crawler.resume();
     jobsStore.updateJob(jobId, { status: "running" });
 
+    return { kind: "Ok", value: undefined };
+  }
+
+  /**
+   * Gets per-agent status for a job (running jobs only; completed jobs return all completed).
+   */
+  getJobAgents(jobId: string): Result<CrawlJobAgent[]> {
+    const job = jobsStore.getJob(jobId);
+    if (job === undefined) {
+      return { kind: "Error", error: "Job not found." };
+    }
+
+    const count = job.agentCount ?? 0;
+    if (count === 0) {
+      return { kind: "Ok", value: [] };
+    }
+
+    const crawler = crawlerStore.get(jobId);
+    if (crawler === undefined) {
+      const status: CrawlJobAgentStatus = "completed";
+      return {
+        kind: "Ok",
+        value: Array.from({ length: count }, (_, i) => ({
+          agentId: i + 1,
+          status,
+        })),
+      };
+    }
+
+    if (job.status === "paused") {
+      return {
+        kind: "Ok",
+        value: Array.from({ length: count }, (_, i) => ({
+          agentId: i + 1,
+          status: "paused" as CrawlJobAgentStatus,
+        })),
+      };
+    }
+
+    const statuses = crawler.getAgentStatuses();
+    const agents: CrawlJobAgent[] = statuses
+      .slice(0, count)
+      .map((a: { slotId: number; status: string }) => ({
+        agentId: a.slotId,
+        status: a.status as CrawlJobAgentStatus,
+      }));
+    return { kind: "Ok", value: agents };
+  }
+
+  /**
+   * Pauses a single agent (slot) for a running job.
+   */
+  pauseAgent(jobId: string, agentId: number): Result<undefined> {
+    const crawler = crawlerStore.get(jobId);
+    if (crawler === undefined) {
+      return { kind: "Error", error: "Job not found or not running." };
+    }
+    crawler.pauseAgent(agentId);
+    return { kind: "Ok", value: undefined };
+  }
+
+  /**
+   * Resumes a single agent (slot) for a running job.
+   */
+  resumeAgent(jobId: string, agentId: number): Result<undefined> {
+    const crawler = crawlerStore.get(jobId);
+    if (crawler === undefined) {
+      return { kind: "Error", error: "Job not found or not running." };
+    }
+    crawler.resumeAgent(agentId);
+    return { kind: "Ok", value: undefined };
+  }
+
+  /**
+   * Stops a single agent (slot) for a running job; it will not receive more tasks.
+   */
+  stopAgent(jobId: string, agentId: number): Result<undefined> {
+    const crawler = crawlerStore.get(jobId);
+    if (crawler === undefined) {
+      return { kind: "Error", error: "Job not found or not running." };
+    }
+    crawler.stopAgent(agentId);
     return { kind: "Ok", value: undefined };
   }
 
@@ -315,6 +425,24 @@ class CrawlerServiceClass {
     });
 
     return { kind: "Ok", value: updatedJobs };
+  }
+
+  /**
+   * Updates a job's metadata (e.g. title for display).
+   * @param jobId - ID of the job to update
+   * @param updates - Partial updates (title only)
+   * @returns Result with updated job or error
+   */
+  updateJob(jobId: string, updates: { title?: string }): Result<CrawlJob> {
+    const job = jobsStore.getJob(jobId);
+    if (job === undefined) {
+      return { kind: "Error", error: "Job not found." };
+    }
+    jobsStore.updateJob(jobId, updates);
+    const updated = jobsStore.getJob(jobId);
+    return updated !== undefined
+      ? { kind: "Ok", value: updated }
+      : { kind: "Error", error: "Job not found." };
   }
 
   /**

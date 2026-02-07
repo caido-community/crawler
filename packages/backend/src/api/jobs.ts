@@ -1,8 +1,9 @@
 import type { SDK } from "caido:plugin";
-import type { CrawlJob, Result } from "shared";
+import type { CrawlJob, CrawlJobAgent, CrawlLogEntry, Result } from "shared";
 
 import { requireSDK } from "../sdk";
 import { CrawlerService } from "../services";
+import { jobLogsStore } from "../stores/jobLogsStore";
 
 export async function startCrawl(
   _sdk: SDK,
@@ -51,10 +52,10 @@ export function stopCrawl(_sdk: SDK, jobId: string): Result<undefined> {
   const result = CrawlerService.stop(jobId);
 
   if (result.kind === "Ok") {
-    sdk.api.send("crawl:completed", {
-      jobId,
-      totalUrls: result.value.totalUrls,
-    });
+    const jobResult = CrawlerService.getJob(jobId);
+    if (jobResult.kind === "Ok") {
+      sdk.api.send("job:updated", jobResult.value);
+    }
   }
 
   return { kind: "Ok", value: undefined };
@@ -96,12 +97,81 @@ export function getJob(_sdk: SDK, jobId: string): Result<CrawlJob> {
   return CrawlerService.getJob(jobId);
 }
 
+export function updateJob(
+  _sdk: SDK,
+  jobId: string,
+  updates: { title?: string },
+): Result<CrawlJob> {
+  const sdk = requireSDK();
+  const result = CrawlerService.updateJob(jobId, updates);
+  if (result.kind === "Ok") {
+    sdk.api.send("job:updated", result.value);
+  }
+  return result;
+}
+
+export function getJobLogs(
+  _sdk: SDK,
+  jobId: string,
+  agentId?: number,
+): Result<CrawlLogEntry[]> {
+  const logs = jobLogsStore.getLogs(jobId, agentId);
+  return { kind: "Ok", value: logs };
+}
+
+export function getJobAgents(
+  _sdk: SDK,
+  jobId: string,
+): Result<CrawlJobAgent[]> {
+  return CrawlerService.getJobAgents(jobId);
+}
+
+export function pauseAgent(
+  _sdk: SDK,
+  jobId: string,
+  agentId: number,
+): Result<undefined> {
+  return CrawlerService.pauseAgent(jobId, agentId);
+}
+
+export function resumeAgent(
+  _sdk: SDK,
+  jobId: string,
+  agentId: number,
+): Result<undefined> {
+  return CrawlerService.resumeAgent(jobId, agentId);
+}
+
+export function stopAgent(
+  _sdk: SDK,
+  jobId: string,
+  agentId: number,
+): Result<undefined> {
+  return CrawlerService.stopAgent(jobId, agentId);
+}
+
 export function clearCompletedJobs(_sdk: SDK): Result<undefined> {
   const sdk = requireSDK();
+
+  const jobsResult = CrawlerService.getJobs();
+  const completedIds =
+    jobsResult.kind === "Ok"
+      ? jobsResult.value
+          .filter(
+            (j) =>
+              j.status === "completed" ||
+              j.status === "failed" ||
+              j.status === "cancelled",
+          )
+          .map((j) => j.id)
+      : [];
 
   const result = CrawlerService.clearCompleted();
 
   if (result.kind === "Ok") {
+    for (const id of completedIds) {
+      jobLogsStore.clear(id);
+    }
     sdk.api.send("jobs:cleared");
   }
 
@@ -114,6 +184,7 @@ export function clearAllJobs(_sdk: SDK): Result<undefined> {
   const result = CrawlerService.clearAll();
 
   if (result.kind === "Ok") {
+    jobLogsStore.clearAll();
     sdk.api.send("jobs:cleared");
   }
 
@@ -126,6 +197,7 @@ export function deleteJob(_sdk: SDK, jobId: string): Result<undefined> {
   const result = CrawlerService.delete(jobId);
 
   if (result.kind === "Ok") {
+    jobLogsStore.clear(jobId);
     sdk.api.send("job:deleted", jobId);
   }
 

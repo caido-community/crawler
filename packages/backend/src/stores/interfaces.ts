@@ -9,6 +9,8 @@
 
 import type { CrawlConfig, CrawlJob } from "shared";
 
+import type { AgentStatus } from "../models";
+
 /**
  * Interface for crawler instances stored in the crawler store.
  * Matches the HttpCrawler class API.
@@ -20,9 +22,13 @@ export interface IStoredCrawler {
     requestsFailed: number;
     requestsTotal: number;
   };
+  getAgentStatuses(): AgentStatus[];
   pause(): void;
   resume(): void;
   abort(): void;
+  pauseAgent(agentId: number): void;
+  resumeAgent(agentId: number): void;
+  stopAgent(agentId: number): void;
 }
 
 /**

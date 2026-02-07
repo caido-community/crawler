@@ -90,8 +90,12 @@ export type LogLevel = "debug" | "info" | "warn" | "error" | "silent";
 export type EventData = {
   requestQueued: Request;
   requestStarted: Request;
-  requestCompleted: { request: Request; response: ResponseData };
-  requestFailed: { request: Request; error: Error };
+  requestCompleted: {
+    request: Request;
+    response: ResponseData;
+    slotId: number;
+  };
+  requestFailed: { request: Request; error: Error; slotId: number };
   requestRetried: Request;
   sessionCreated: Session;
   sessionRetired: Session;
