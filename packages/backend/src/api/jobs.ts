@@ -131,7 +131,14 @@ export function pauseAgent(
   jobId: string,
   agentId: number,
 ): Result<undefined> {
-  return CrawlerService.pauseAgent(jobId, agentId);
+  const result = CrawlerService.pauseAgent(jobId, agentId);
+  if (result.kind === "Ok") {
+    const sdk = requireSDK();
+    const line = `Crawl Agent ${agentId} has been paused.`;
+    jobLogsStore.append(jobId, line, undefined, "warning");
+    sdk.api.send("crawl:log", { jobId, line, level: "warning" });
+  }
+  return result;
 }
 
 export function resumeAgent(
@@ -139,7 +146,14 @@ export function resumeAgent(
   jobId: string,
   agentId: number,
 ): Result<undefined> {
-  return CrawlerService.resumeAgent(jobId, agentId);
+  const result = CrawlerService.resumeAgent(jobId, agentId);
+  if (result.kind === "Ok") {
+    const sdk = requireSDK();
+    const line = `Crawl Agent ${agentId} has been resumed.`;
+    jobLogsStore.append(jobId, line, undefined, "info");
+    sdk.api.send("crawl:log", { jobId, line, level: "info" });
+  }
+  return result;
 }
 
 export function stopAgent(
@@ -147,7 +161,14 @@ export function stopAgent(
   jobId: string,
   agentId: number,
 ): Result<undefined> {
-  return CrawlerService.stopAgent(jobId, agentId);
+  const result = CrawlerService.stopAgent(jobId, agentId);
+  if (result.kind === "Ok") {
+    const sdk = requireSDK();
+    const line = `Crawl Agent ${agentId} has been stopped.`;
+    jobLogsStore.append(jobId, line, undefined, "warning");
+    sdk.api.send("crawl:log", { jobId, line, level: "warning" });
+  }
+  return result;
 }
 
 export function clearCompletedJobs(_sdk: SDK): Result<undefined> {

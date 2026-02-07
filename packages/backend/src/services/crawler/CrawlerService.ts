@@ -94,8 +94,16 @@ class CrawlerServiceClass {
 
     let seedUrls: string[];
     if (isManual) {
-      const fromHistory = await getSeedUrlsFromHistory(requireSDK(), host);
-      seedUrls = fromHistory.length > 0 ? fromHistory : [targetUrl];
+      const unique = new Set<string>([targetUrl]);
+      const skipHistory =
+        config.devMode === true && config.devModeDisableHttpHistory === true;
+      if (!skipHistory) {
+        const fromHistory = await getSeedUrlsFromHistory(requireSDK(), host);
+        for (const u of fromHistory) {
+          unique.add(u);
+        }
+      }
+      seedUrls = Array.from(unique);
     } else {
       seedUrls = [targetUrl];
     }

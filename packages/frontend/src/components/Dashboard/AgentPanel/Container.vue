@@ -3,11 +3,29 @@ import Button from "primevue/button";
 import { computed, onMounted, ref, watch } from "vue";
 
 import { useJobsStore } from "@/stores/jobs";
-import type { CrawlJob, CrawlJobAgent } from "@/types";
+import type { CrawlJob, CrawlJobAgent, CrawlJobAgentStatus } from "@/types";
 import {
   getAgentDotClass,
   getAgentDotClassFromAgentStatus,
 } from "@/utils/crawlJobStatus";
+
+function agentStatusLabel(status: CrawlJobAgentStatus | undefined): string {
+  if (status === undefined) return "—";
+  switch (status) {
+    case "running":
+      return "Crawling";
+    case "idle":
+      return "Idle";
+    case "paused":
+      return "Paused";
+    case "stopped":
+      return "Stopped";
+    case "completed":
+      return "Done";
+    default:
+      return status;
+  }
+}
 
 const props = withDefaults(
   defineProps<{
@@ -45,6 +63,9 @@ const dotClass = (agentId: number) => {
 const isAgentRunning = (agentId: number) => agentStatus(agentId) === "running";
 const isAgentPaused = (agentId: number) => agentStatus(agentId) === "paused";
 const isJobPaused = computed(() => props.job.status === "paused");
+const canShowAgentControls = computed(
+  () => props.job.status === "running" || props.job.status === "paused",
+);
 const canControlAgent = (agentId: number) => {
   const s = agentStatus(agentId);
   return s === "running" || s === "paused" || s === "idle";
@@ -54,15 +75,25 @@ const selectAgent = (index: number) => {
   emit("selectAgent", index);
 };
 
-const handlePause = (agentId: number) => {
-  jobsStore.pauseAgent(props.job.id, agentId).then(() => fetchAgentStatuses());
-};
-
-const handleResume = (agentId: number) => {
-  jobsStore.resumeAgent(props.job.id, agentId).then(() => fetchAgentStatuses());
-};
-
+const pausingAgentId = ref<number | undefined>();
+const resumingAgentId = ref<number | undefined>();
 const stoppingAgentId = ref<number | undefined>();
+
+const handlePause = async (agentId: number) => {
+  if (pausingAgentId.value !== undefined) return;
+  pausingAgentId.value = agentId;
+  await jobsStore.pauseAgent(props.job.id, agentId);
+  await fetchAgentStatuses();
+  pausingAgentId.value = undefined;
+};
+
+const handleResume = async (agentId: number) => {
+  if (resumingAgentId.value !== undefined) return;
+  resumingAgentId.value = agentId;
+  await jobsStore.resumeAgent(props.job.id, agentId);
+  await fetchAgentStatuses();
+  resumingAgentId.value = undefined;
+};
 
 onMounted(() => fetchAgentStatuses());
 watch(
@@ -119,31 +150,42 @@ const handleStop = (agentId: number) => {
           @click="selectAgent(i)"
         >
           <div :class="['w-2 h-2 rounded-full shrink-0', dotClass(i)]" />
-          <span class="text-sm text-surface-300 truncate">Agent {{ i }}</span>
+          <span class="text-sm text-surface-300 truncate">
+            Crawl Agent {{ i }}
+            <span class="text-surface-500 font-normal">
+              · {{ agentStatusLabel(agentStatus(i)) }}
+            </span>
+          </span>
         </button>
         <div class="flex items-center gap-1 shrink-0">
           <Button
-            v-if="canControlAgent(i) && isAgentRunning(i)"
+            v-if="
+              canShowAgentControls && canControlAgent(i) && isAgentRunning(i)
+            "
             severity="secondary"
             outlined
             size="small"
             icon="fas fa-pause"
             class="!p-1.5 !min-w-0"
-            :disabled="isJobPaused"
-            @click.stop="handlePause(i)"
+            :disabled="isJobPaused || pausingAgentId === i"
+            @mousedown.stop
+            @click.stop.prevent="handlePause(i)"
           />
           <Button
-            v-if="canControlAgent(i) && isAgentPaused(i)"
+            v-if="
+              canShowAgentControls && canControlAgent(i) && isAgentPaused(i)
+            "
             severity="secondary"
             outlined
             size="small"
             icon="fas fa-play"
             class="!p-1.5 !min-w-0"
-            :disabled="isJobPaused"
-            @click.stop="handleResume(i)"
+            :disabled="isJobPaused || resumingAgentId === i"
+            @mousedown.stop
+            @click.stop.prevent="handleResume(i)"
           />
           <Button
-            v-if="canControlAgent(i)"
+            v-if="canShowAgentControls && canControlAgent(i)"
             severity="danger"
             outlined
             size="small"

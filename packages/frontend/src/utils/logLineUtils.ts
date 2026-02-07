@@ -20,8 +20,10 @@ export function getLogLineClass(level: string | undefined): string {
       return "text-yellow-400";
     case "error":
       return "text-red-400";
+    case "info":
+      return "text-surface-400";
     default:
-      return "text-surface-200";
+      return "text-surface-400";
   }
 }
 

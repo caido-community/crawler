@@ -128,5 +128,46 @@ const handleUserAgentBlur = (event: Event) => {
         @blur="handleUserAgentBlur"
       />
     </div>
+
+    <div class="flex flex-col gap-4 pt-4 mt-4 border-t border-surface-700">
+      <div
+        class="flex items-start justify-between gap-4 py-3 border-b border-surface-700"
+      >
+        <div class="flex flex-col gap-0.5 min-w-0">
+          <label class="text-sm font-medium text-surface-200">
+            Developer mode
+          </label>
+          <p class="text-xs text-surface-500">
+            Show extra options for testing (e.g. disable HTTP history for
+            seeds).
+          </p>
+        </div>
+        <InputSwitch
+          :model-value="configStore.config.devMode ?? false"
+          @update:model-value="handleUpdateConfig('devMode', $event)"
+        />
+      </div>
+      <template v-if="configStore.config.devMode">
+        <div
+          class="flex items-start justify-between gap-4 py-3 border-b border-surface-700"
+        >
+          <div class="flex flex-col gap-0.5 min-w-0">
+            <label class="text-sm font-medium text-surface-200">
+              Disable HTTP history for crawl seeds
+            </label>
+            <p class="text-xs text-surface-500">
+              Manual crawls use only the start URL as seed; no URLs from HTTP
+              history.
+            </p>
+          </div>
+          <InputSwitch
+            :model-value="configStore.config.devModeDisableHttpHistory ?? false"
+            @update:model-value="
+              handleUpdateConfig('devModeDisableHttpHistory', $event)
+            "
+          />
+        </div>
+      </template>
+    </div>
   </div>
 </template>

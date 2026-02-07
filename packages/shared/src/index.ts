@@ -12,6 +12,8 @@ export const CrawlConfigSchema = z.object({
   excludePatterns: z.array(z.string()),
   respectRobotsTxt: z.boolean(),
   userAgent: z.string(),
+  devMode: z.boolean().optional(),
+  devModeDisableHttpHistory: z.boolean().optional(),
 });
 
 export type CrawlConfig = z.infer<typeof CrawlConfigSchema>;
@@ -28,6 +30,8 @@ export const DEFAULT_CONFIG: CrawlConfig = {
   excludePatterns: [],
   respectRobotsTxt: false,
   userAgent: "Caido-Crawler",
+  devMode: false,
+  devModeDisableHttpHistory: false,
 };
 
 export const CrawlJobStatusSchema = z.enum([

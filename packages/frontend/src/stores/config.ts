@@ -16,6 +16,8 @@ const defaultConfig: CrawlConfig = {
   excludePatterns: [],
   respectRobotsTxt: false,
   userAgent: "Caido-Crawler",
+  devMode: false,
+  devModeDisableHttpHistory: false,
 };
 
 export const useConfigStore = defineStore("config", () => {

@@ -29,7 +29,7 @@ defineEmits<{
       </div>
       <div class="h-1/2 min-h-[12rem] flex flex-col overflow-hidden">
         <LogPanel
-          :title="`Agent ${selectedAgentIndex} Logs`"
+          :title="`Crawl Agent ${selectedAgentIndex} Logs`"
           :lines="agentLogLines"
         />
       </div>
