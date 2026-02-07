@@ -1,8 +1,8 @@
 <script setup lang="ts">
 import Button from "primevue/button";
 import Card from "primevue/card";
-import { computed } from "vue";
 import { useConfirm } from "primevue/useconfirm";
+import { computed } from "vue";
 
 import { useJobsStore } from "@/stores/jobs";
 
