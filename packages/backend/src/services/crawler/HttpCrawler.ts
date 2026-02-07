@@ -69,6 +69,7 @@ export class HttpCrawler implements CrawlerInterface {
 
   private eventListeners: Map<CrawlerEventType, CrawlerEventListener[]> =
     new Map();
+  private startedSlots: Set<number> = new Set();
   private log: LogInterface;
   private dataset: Record<string, unknown>[] = [];
 
@@ -344,6 +345,10 @@ export class HttpCrawler implements CrawlerInterface {
         }
 
         this.pool.addTask(async (slotId) => {
+          if (!this.startedSlots.has(slotId)) {
+            this.startedSlots.add(slotId);
+            this.emit("agentStarted", { slotId });
+          }
           await this.processRequest(request, slotId);
         });
       }

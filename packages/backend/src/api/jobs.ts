@@ -49,13 +49,29 @@ export async function startCrawl(
 export function stopCrawl(_sdk: SDK, jobId: string): Result<undefined> {
   const sdk = requireSDK();
 
+  const jobResult = CrawlerService.getJob(jobId);
+  const agentCount =
+    jobResult.kind === "Ok" ? (jobResult.value.agentCount ?? 0) : 0;
+
   const result = CrawlerService.stop(jobId);
 
   if (result.kind === "Ok") {
-    const jobResult = CrawlerService.getJob(jobId);
-    if (jobResult.kind === "Ok") {
-      sdk.api.send("job:updated", jobResult.value);
+    const updatedJobResult = CrawlerService.getJob(jobId);
+    if (updatedJobResult.kind === "Ok") {
+      sdk.api.send("job:updated", updatedJobResult.value);
     }
+    for (let agentId = 1; agentId <= agentCount; agentId++) {
+      const line = `Crawl Agent ${agentId} has been stopped.`;
+      jobLogsStore.append(jobId, line, agentId, "error");
+      sdk.api.send("crawl:log", { jobId, line, agentId, level: "error" });
+    }
+    const allStoppedLine = "All agents have been stopped.";
+    jobLogsStore.append(jobId, allStoppedLine, undefined, "error");
+    sdk.api.send("crawl:log", {
+      jobId,
+      line: allStoppedLine,
+      level: "error",
+    });
   }
 
   return { kind: "Ok", value: undefined };
@@ -135,8 +151,8 @@ export function pauseAgent(
   if (result.kind === "Ok") {
     const sdk = requireSDK();
     const line = `Crawl Agent ${agentId} has been paused.`;
-    jobLogsStore.append(jobId, line, undefined, "warning");
-    sdk.api.send("crawl:log", { jobId, line, level: "warning" });
+    jobLogsStore.append(jobId, line, agentId, "warning");
+    sdk.api.send("crawl:log", { jobId, line, agentId, level: "warning" });
   }
   return result;
 }
@@ -149,9 +165,9 @@ export function resumeAgent(
   const result = CrawlerService.resumeAgent(jobId, agentId);
   if (result.kind === "Ok") {
     const sdk = requireSDK();
-    const line = `Crawl Agent ${agentId} has been resumed.`;
-    jobLogsStore.append(jobId, line, undefined, "info");
-    sdk.api.send("crawl:log", { jobId, line, level: "info" });
+    const line = `Crawl Agent ${agentId} has started again.`;
+    jobLogsStore.append(jobId, line, agentId, "success");
+    sdk.api.send("crawl:log", { jobId, line, agentId, level: "success" });
   }
   return result;
 }
@@ -165,8 +181,8 @@ export function stopAgent(
   if (result.kind === "Ok") {
     const sdk = requireSDK();
     const line = `Crawl Agent ${agentId} has been stopped.`;
-    jobLogsStore.append(jobId, line, undefined, "warning");
-    sdk.api.send("crawl:log", { jobId, line, level: "warning" });
+    jobLogsStore.append(jobId, line, agentId, "error");
+    sdk.api.send("crawl:log", { jobId, line, agentId, level: "error" });
   }
   return result;
 }

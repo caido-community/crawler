@@ -151,10 +151,21 @@ class CrawlerServiceClass {
       callbacks.onError?.(request.url, error.message);
     });
 
+    crawler.on("agentStarted", (event) => {
+      const { slotId } = event.data;
+      logLine(`Crawl Agent ${slotId} has started.`, slotId, "info");
+    });
+
     crawler.on("crawlerCompleted", () => {
       if (status === "running") {
         status = "completed";
         const stats = getStats();
+        const job = jobsStore.getJob(jobId);
+        const agentCount = job?.agentCount ?? 0;
+        for (let agentId = 1; agentId <= agentCount; agentId++) {
+          logLine(`Crawl Agent ${agentId} has finished.`, agentId, "success");
+        }
+        logLine("All agents have finished.", undefined, "success");
         logLine(
           `Crawl completed. ${stats.crawledUrls} URLs crawled.`,
           undefined,

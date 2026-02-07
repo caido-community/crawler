@@ -88,6 +88,7 @@ export type LogLevel = "debug" | "info" | "warn" | "error" | "silent";
  * Event types emitted by the HttpCrawler.
  */
 export type EventData = {
+  agentStarted: { slotId: number };
   requestQueued: Request;
   requestStarted: Request;
   requestCompleted: {

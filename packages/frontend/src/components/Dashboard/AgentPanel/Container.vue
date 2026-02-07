@@ -157,7 +157,11 @@ const handleStop = (agentId: number) => {
             </span>
           </span>
         </button>
-        <div class="flex items-center gap-1 shrink-0">
+        <div
+          class="flex items-center gap-1 shrink-0"
+          @mousedown.stop
+          @click.stop
+        >
           <Button
             v-if="
               canShowAgentControls && canControlAgent(i) && isAgentRunning(i)
@@ -168,8 +172,7 @@ const handleStop = (agentId: number) => {
             icon="fas fa-pause"
             class="!p-1.5 !min-w-0"
             :disabled="isJobPaused || pausingAgentId === i"
-            @mousedown.stop
-            @click.stop.prevent="handlePause(i)"
+            @mousedown.prevent.stop="handlePause(i)"
           />
           <Button
             v-if="
@@ -181,8 +184,7 @@ const handleStop = (agentId: number) => {
             icon="fas fa-play"
             class="!p-1.5 !min-w-0"
             :disabled="isJobPaused || resumingAgentId === i"
-            @mousedown.stop
-            @click.stop.prevent="handleResume(i)"
+            @mousedown.prevent.stop="handleResume(i)"
           />
           <Button
             v-if="canShowAgentControls && canControlAgent(i)"
