@@ -5,6 +5,8 @@
 
 import type { CrawlConfig, CrawlJob, CrawlJobStatus, Result } from "shared";
 
+import { getSeedUrlsFromHistory } from "../../repositories";
+import { requireSDK } from "../../sdk";
 import { configStore } from "../../stores/configStore";
 import { crawlerStore } from "../../stores/crawlerStore";
 import { jobsStore } from "../../stores/jobsStore";
@@ -28,14 +30,15 @@ function mapConfigToOptions(
   config: CrawlConfig,
   isManual = false,
 ): CrawlerOptions {
-  // Manual crawls ignore crawlInScopeOnly and crawl all links
-  // Auto-crawls respect crawlInScopeOnly setting
   const useScopeFilter = isManual ? false : config.crawlInScopeOnly;
+  const concurrency = isManual
+    ? config.manualCrawlAgents
+    : CRAWLER_DEFAULTS.MAX_CONCURRENCY;
 
   return {
     maxRequestsPerMinute: Math.floor(60000 / Math.max(config.requestDelay, 1)),
-    maxConcurrency: CRAWLER_DEFAULTS.MAX_CONCURRENCY,
-    minConcurrency: CRAWLER_DEFAULTS.MIN_CONCURRENCY,
+    maxConcurrency: concurrency,
+    minConcurrency: isManual ? 1 : CRAWLER_DEFAULTS.MIN_CONCURRENCY,
     maxRequestsPerCrawl: config.maxPagesPerDomain,
     maxDepth: config.maxDepth,
     respectRobotsTxt: config.respectRobotsTxt,
@@ -67,11 +70,11 @@ class CrawlerServiceClass {
    * @param isManual - Whether this is a manual crawl (ignores scope restrictions)
    * @returns Result containing the created job and jobId, or error message
    */
-  start(
+  async start(
     targetUrl: string,
     callbacks: StartCrawlCallbacks = {},
     isManual = false,
-  ): Result<{ job: CrawlJob; jobId: string }> {
+  ): Promise<Result<{ job: CrawlJob; jobId: string }>> {
     const host = getHost(targetUrl);
     if (host === undefined) {
       return { kind: "Error", error: "Invalid URL provided." };
@@ -88,6 +91,14 @@ class CrawlerServiceClass {
     const config = configStore.getConfig();
     const jobId = generateJobId();
     const options = mapConfigToOptions(config, isManual);
+
+    let seedUrls: string[];
+    if (isManual) {
+      const fromHistory = await getSeedUrlsFromHistory(requireSDK(), host);
+      seedUrls = fromHistory.length > 0 ? fromHistory : [targetUrl];
+    } else {
+      seedUrls = [targetUrl];
+    }
 
     const crawler = new HttpCrawler(options);
     const startedAt = new Date();
@@ -107,7 +118,6 @@ class CrawlerServiceClass {
       };
     };
 
-    // Set up event handlers
     crawler.on("requestCompleted", (event) => {
       lastActivityAt = new Date();
       const { request, response } = event.data;
@@ -157,8 +167,7 @@ class CrawlerServiceClass {
       callbacks.onComplete?.(stats, jobId);
     });
 
-    // Start the crawl
-    crawler.addRequests([targetUrl]);
+    crawler.addRequests(seedUrls);
     crawlerStore.register(jobId, crawler);
 
     const job: CrawlJob = {

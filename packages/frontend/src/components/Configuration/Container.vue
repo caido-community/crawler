@@ -131,6 +131,18 @@ const handleUserAgentBlur = (event: Event) => {
             "
           />
         </div>
+
+        <div class="flex flex-col gap-1">
+          <label class="text-sm font-medium">Manual crawl agents</label>
+          <InputNumber
+            :model-value="configStore.config.manualCrawlAgents"
+            :min="1"
+            :max="20"
+            @update:model-value="
+              handleUpdateConfig('manualCrawlAgents', $event ?? 5)
+            "
+          />
+        </div>
       </div>
 
       <!-- User Agent -->

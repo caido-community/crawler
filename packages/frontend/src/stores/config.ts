@@ -11,6 +11,7 @@ const defaultConfig: CrawlConfig = {
   requestDelay: 100,
   maxDepth: 5,
   maxPagesPerDomain: 100,
+  manualCrawlAgents: 5,
   includePatterns: [],
   excludePatterns: [],
   respectRobotsTxt: false,

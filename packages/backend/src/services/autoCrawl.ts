@@ -67,8 +67,7 @@ class AutoCrawlServiceClass {
   }
 
   private startCrawl(url: string, sdk: BackendSDK): void {
-    // jobsStore updates are now handled internally by CrawlerService
-    const result = CrawlerService.start(url, {
+    CrawlerService.start(url, {
       onProgress: (stats, jobId) => {
         sdk.api.send("crawl:progress", {
           jobId,
@@ -82,15 +81,15 @@ class AutoCrawlServiceClass {
           totalUrls: stats.crawledUrls,
         });
       },
+    }).then((result) => {
+      if (result.kind === "Ok") {
+        sdk.api.send("crawl:started", {
+          jobId: result.value.jobId,
+          host: result.value.job.host,
+          targetUrl: result.value.job.targetUrl,
+        });
+      }
     });
-
-    if (result.kind === "Ok") {
-      sdk.api.send("crawl:started", {
-        jobId: result.value.jobId,
-        host: result.value.job.host,
-        targetUrl: result.value.job.targetUrl,
-      });
-    }
   }
 
   private isStaticResource(path: string): boolean {

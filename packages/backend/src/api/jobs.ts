@@ -4,11 +4,13 @@ import type { CrawlJob, Result } from "shared";
 import { requireSDK } from "../sdk";
 import { CrawlerService } from "../services";
 
-export function startCrawl(_sdk: SDK, targetUrl: string): Result<CrawlJob> {
+export async function startCrawl(
+  _sdk: SDK,
+  targetUrl: string,
+): Promise<Result<CrawlJob>> {
   const sdk = requireSDK();
 
-  // jobsStore updates are now handled internally by CrawlerService
-  const result = CrawlerService.start(
+  const result = await CrawlerService.start(
     targetUrl,
     {
       onProgress: (stats, jobId) => {
@@ -29,7 +31,7 @@ export function startCrawl(_sdk: SDK, targetUrl: string): Result<CrawlJob> {
       },
     },
     true,
-  ); // isManual = true for manual crawls
+  );
 
   if (result.kind === "Error") {
     return result;
