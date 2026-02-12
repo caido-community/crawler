@@ -22,6 +22,12 @@ const handleUserAgentBlur = (event: Event) => {
   const target = event.target as HTMLInputElement;
   handleUpdateConfig("userAgent", target.value);
 };
+
+const handleHttpqlFilterBlur = (event: Event) => {
+  const target = event.target as HTMLInputElement;
+  const trimmed = target.value.trim();
+  configStore.updateConfig({ httpqlFilter: trimmed.length > 0 ? trimmed : "" });
+};
 </script>
 
 <template>
@@ -131,6 +137,21 @@ const handleUserAgentBlur = (event: Event) => {
         class="w-full"
         @blur="handleUserAgentBlur"
       />
+    </div>
+
+    <div class="flex flex-col gap-1">
+      <label class="text-sm font-medium text-surface-300">HTTPQL filter</label>
+      <InputText
+        :model-value="configStore.config.httpqlFilter ?? ''"
+        class="w-full font-mono text-sm"
+        placeholder='e.g. req.host.ne:"admin.example.com"'
+        @blur="handleHttpqlFilterBlur"
+      />
+      <p class="text-xs text-surface-500">
+        Only crawl URLs matching this HTTPQL query. Leave empty to crawl all.
+        Use AND to combine (e.g. req.host.ne:"admin.x.com" AND
+        req.path.cont:"/api").
+      </p>
     </div>
 
     <div class="flex flex-col gap-4 pt-4 mt-4 border-t border-surface-700">

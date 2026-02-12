@@ -21,6 +21,7 @@ import { jobsStore } from "../../stores/jobsStore";
 
 import { CRAWLER_DEFAULTS } from "./constants";
 import { HttpCrawler } from "./HttpCrawler";
+import { matchesHttpqlFilter } from "./httpqlFilter";
 import { getHost } from "./linkProcessor";
 import type { CrawlerOptions, CrawlStats, StartCrawlCallbacks } from "./types";
 
@@ -39,9 +40,7 @@ function mapConfigToOptions(
   isManual = false,
 ): CrawlerOptions {
   const useScopeFilter = isManual ? false : config.crawlInScopeOnly;
-  const concurrency = isManual
-    ? config.manualCrawlAgents
-    : CRAWLER_DEFAULTS.MAX_CONCURRENCY;
+  const concurrency = config.manualCrawlAgents;
 
   return {
     maxRequestsPerMinute: Math.floor(60000 / Math.max(config.requestDelay, 1)),
@@ -52,6 +51,10 @@ function mapConfigToOptions(
     respectRobotsTxt: config.respectRobotsTxt,
     sameDomainOnly: useScopeFilter,
     userAgent: config.userAgent,
+    httpqlFilter:
+      config.httpqlFilter?.trim() !== ""
+        ? config.httpqlFilter?.trim()
+        : undefined,
     maxRequestRetries: CRAWLER_DEFAULTS.MAX_REQUEST_RETRIES,
     retryDelayMs: CRAWLER_DEFAULTS.RETRY_DELAY_MS,
     maxRetryDelayMs: CRAWLER_DEFAULTS.MAX_RETRY_DELAY_MS,
@@ -106,6 +109,13 @@ class CrawlerServiceClass {
       seedUrls = Array.from(unique);
     } else {
       seedUrls = [targetUrl];
+    }
+
+    const httpqlFilter = config.httpqlFilter?.trim();
+    if (httpqlFilter !== undefined && httpqlFilter !== "") {
+      seedUrls = seedUrls.filter((url) =>
+        matchesHttpqlFilter(url, httpqlFilter, "GET"),
+      );
     }
 
     const crawler = new HttpCrawler(options);
@@ -204,9 +214,7 @@ class CrawlerServiceClass {
     crawler.addRequests(seedUrls);
     crawlerStore.register(jobId, crawler);
 
-    const agentCount = isManual
-      ? config.manualCrawlAgents
-      : CRAWLER_DEFAULTS.MAX_CONCURRENCY;
+    const agentCount = config.manualCrawlAgents;
     const job: CrawlJob = {
       id: jobId,
       targetUrl,
@@ -328,12 +336,13 @@ class CrawlerServiceClass {
 
     const crawler = crawlerStore.get(jobId);
     if (crawler === undefined) {
-      const status: CrawlJobAgentStatus = "completed";
+      const agentStatus: CrawlJobAgentStatus =
+        job.status === "cancelled" ? "stopped" : "completed";
       return {
         kind: "Ok",
         value: Array.from({ length: count }, (_, i) => ({
           agentId: i + 1,
-          status,
+          status: agentStatus,
         })),
       };
     }

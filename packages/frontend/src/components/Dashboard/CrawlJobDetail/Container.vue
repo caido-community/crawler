@@ -23,6 +23,13 @@ const jobsStore = useJobsStore();
 const progress = computed(() => getProgressPercent(props.job));
 const isRunning = computed(() => props.job.status === "running");
 const isPaused = computed(() => props.job.status === "paused");
+const isDone = computed(
+  () => props.job.status === "completed" || props.job.status === "cancelled",
+);
+
+const recrawl = () => {
+  jobsStore.startCrawl(props.job.targetUrl);
+};
 </script>
 
 <template>
@@ -79,6 +86,15 @@ const isPaused = computed(() => props.job.status === "paused");
             size="small"
             icon="fas fa-stop"
             @click="jobsStore.stopCrawl(job.id)"
+          />
+          <Button
+            v-if="isDone"
+            label="Recrawl"
+            severity="secondary"
+            outlined
+            size="small"
+            icon="fas fa-redo"
+            @click="recrawl"
           />
           <Button
             label="Delete"

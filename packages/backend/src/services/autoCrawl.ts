@@ -3,6 +3,7 @@ import { jobsStore } from "../stores/jobsStore";
 import type { BackendSDK, InterceptedRequest } from "../types";
 
 import { CrawlerService } from "./crawler";
+import { matchesHttpqlFilter } from "./crawler/httpqlFilter";
 
 class AutoCrawlServiceClass {
   private seenHosts: Set<string> = new Set();
@@ -43,9 +44,17 @@ class AutoCrawlServiceClass {
       return;
     }
 
-    this.seenHosts.add(host);
-
     const url = this.buildUrl(request);
+
+    const httpqlFilter = config.httpqlFilter?.trim();
+    if (httpqlFilter !== undefined && httpqlFilter !== "") {
+      if (!matchesHttpqlFilter(url, httpqlFilter)) {
+        this.seenHosts.add(host);
+        return;
+      }
+    }
+
+    this.seenHosts.add(host);
     this.startCrawl(url, sdk);
   }
 

@@ -23,6 +23,7 @@ import { CompositeExtractor, HtmlExtractor } from "../../parsers";
 import { HttpClient } from "../../repositories";
 
 import { CRAWLER_DEFAULTS } from "./constants";
+import { matchesHttpqlFilter } from "./httpqlFilter";
 import { filterLinksByStrategy, getDomain } from "./linkProcessor";
 import { RobotsHandler } from "./robotsHandler";
 import { StatsTracker } from "./statsTracker";
@@ -159,6 +160,7 @@ export class HttpCrawler implements CrawlerInterface {
       requestQueue: options.requestQueue ?? new RequestQueue(),
       router: options.router ?? new Router(),
       requestHandler: options.requestHandler,
+      httpqlFilter: options.httpqlFilter,
     };
   }
 
@@ -538,13 +540,21 @@ export class HttpCrawler implements CrawlerInterface {
     const result = tempExtractor.extract(response);
     let links = result.links;
 
-    // Filter links based on strategy
     links = filterLinksByStrategy(
       links,
       response.url,
       options.strategy as LinkStrategy | undefined,
       this.options.sameDomainOnly,
     );
+
+    if (
+      this.options.httpqlFilter !== undefined &&
+      this.options.httpqlFilter.trim() !== ""
+    ) {
+      links = links.filter((link) =>
+        matchesHttpqlFilter(link.url, this.options.httpqlFilter, "GET"),
+      );
+    }
 
     let added = 0;
     for (const link of links) {

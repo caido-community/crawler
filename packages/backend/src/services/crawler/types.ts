@@ -47,6 +47,7 @@ export type CrawlerOptions = {
   requestQueue?: RequestQueue;
   requestHandler?: (context: CrawlingContext) => Promise<void>;
   router?: Router;
+  httpqlFilter?: string;
 };
 
 /**
@@ -77,6 +78,7 @@ export type HttpCrawlerInternalOptions = {
   requestHandler?: (context: CrawlingContext) => Promise<void>;
   failedRequestHandler?: FailedRequestHandler;
   sessionPoolOptions?: SessionPoolOptions;
+  httpqlFilter?: string;
 };
 
 /**

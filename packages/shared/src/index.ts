@@ -12,6 +12,7 @@ export const CrawlConfigSchema = z.object({
   excludePatterns: z.array(z.string()),
   respectRobotsTxt: z.boolean(),
   userAgent: z.string(),
+  httpqlFilter: z.string().optional(),
   devMode: z.boolean().optional(),
   devModeDisableHttpHistory: z.boolean().optional(),
 });
