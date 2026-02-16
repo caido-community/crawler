@@ -47,6 +47,7 @@ export type CrawlerOptions = {
   requestQueue?: RequestQueue;
   requestHandler?: (context: CrawlingContext) => Promise<void>;
   router?: Router;
+  httpqlFilter?: string;
 };
 
 /**
@@ -77,6 +78,7 @@ export type HttpCrawlerInternalOptions = {
   requestHandler?: (context: CrawlingContext) => Promise<void>;
   failedRequestHandler?: FailedRequestHandler;
   sessionPoolOptions?: SessionPoolOptions;
+  httpqlFilter?: string;
 };
 
 /**
@@ -88,10 +90,15 @@ export type LogLevel = "debug" | "info" | "warn" | "error" | "silent";
  * Event types emitted by the HttpCrawler.
  */
 export type EventData = {
+  agentStarted: { slotId: number };
   requestQueued: Request;
   requestStarted: Request;
-  requestCompleted: { request: Request; response: ResponseData };
-  requestFailed: { request: Request; error: Error };
+  requestCompleted: {
+    request: Request;
+    response: ResponseData;
+    slotId: number;
+  };
+  requestFailed: { request: Request; error: Error; slotId: number };
   requestRetried: Request;
   sessionCreated: Session;
   sessionRetired: Session;

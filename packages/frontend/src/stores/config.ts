@@ -11,10 +11,13 @@ const defaultConfig: CrawlConfig = {
   requestDelay: 100,
   maxDepth: 5,
   maxPagesPerDomain: 100,
+  manualCrawlAgents: 5,
   includePatterns: [],
   excludePatterns: [],
   respectRobotsTxt: false,
   userAgent: "Caido-Crawler",
+  devMode: false,
+  devModeDisableHttpHistory: false,
 };
 
 export const useConfigStore = defineStore("config", () => {
@@ -61,15 +64,10 @@ export const useConfigStore = defineStore("config", () => {
     }
   };
 
-  const toggleEnabled = async () => {
-    await updateConfig({ enabled: !config.value.enabled });
-  };
-
   return {
     config,
     loading,
     loadConfig,
     updateConfig,
-    toggleEnabled,
   };
 });

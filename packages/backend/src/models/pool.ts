@@ -17,7 +17,11 @@ export type PoolStats = {
   avgTaskDurationMs: number;
 };
 
-type TaskFunction<T> = () => Promise<T>;
+export type SlotStatus = "idle" | "running" | "paused" | "stopped";
+
+export type AgentStatus = { slotId: number; status: SlotStatus };
+
+type TaskFunction<T> = (slotId: number) => Promise<T>;
 
 type QueuedTask<T> = {
   task: TaskFunction<T>;
@@ -26,10 +30,18 @@ type QueuedTask<T> = {
   createdAt: number;
 };
 
+type RunningSlot = {
+  slotId: number;
+  promise: Promise<void>;
+};
+
 export class ConcurrencyPool {
   private options: Required<ConcurrencyPoolOptions>;
   private taskQueue: QueuedTask<unknown>[] = [];
-  private runningTasks: Set<Promise<void>> = new Set();
+  private runningSlots: Map<number, RunningSlot> = new Map();
+  private availableSlots: Set<number> = new Set();
+  private pausedSlots: Set<number> = new Set();
+  private stoppedSlots: Set<number> = new Set();
   private isRunning: boolean = false;
   private isPaused: boolean = false;
   private completedTasks: number = 0;
@@ -49,6 +61,10 @@ export class ConcurrencyPool {
     };
 
     this.currentConcurrency = this.options.desiredConcurrency;
+
+    for (let i = 1; i <= this.options.maxConcurrency; i++) {
+      this.availableSlots.add(i);
+    }
   }
 
   start(): void {
@@ -70,8 +86,10 @@ export class ConcurrencyPool {
     this.isRunning = false;
     this.stopAutoscaling();
 
-    if (this.runningTasks.size > 0) {
-      await Promise.all(this.runningTasks);
+    if (this.runningSlots.size > 0) {
+      await Promise.all(
+        Array.from(this.runningSlots.values()).map((s) => s.promise),
+      );
     }
   }
 
@@ -106,23 +124,36 @@ export class ConcurrencyPool {
     return Promise.all(promises);
   }
 
+  private getAssignableSlot(): number | undefined {
+    for (const slotId of this.availableSlots) {
+      if (!this.pausedSlots.has(slotId) && !this.stoppedSlots.has(slotId)) {
+        return slotId;
+      }
+    }
+    return undefined;
+  }
+
   private processQueue(): void {
     if (!this.isRunning || this.isPaused) {
       return;
     }
 
     while (
-      this.runningTasks.size < this.currentConcurrency &&
+      this.runningSlots.size < this.currentConcurrency &&
       this.taskQueue.length > 0
     ) {
+      const slotId = this.getAssignableSlot();
+      if (slotId === undefined) break;
+
       const queuedTask = this.taskQueue.shift();
       if (queuedTask !== undefined) {
-        this.runTask(queuedTask);
+        this.availableSlots.delete(slotId);
+        this.runTask(queuedTask, slotId);
       }
     }
   }
 
-  private runTask<T>(queuedTask: QueuedTask<T>): void {
+  private runTask<T>(queuedTask: QueuedTask<T>, slotId: number): void {
     const startTime = Date.now();
     const promiseRef: { current: Promise<void> | undefined } = {
       current: undefined,
@@ -138,7 +169,10 @@ export class ConcurrencyPool {
           }, this.options.taskTimeoutMs);
         });
 
-        const result = await Promise.race([queuedTask.task(), timeoutPromise]);
+        const result = await Promise.race([
+          queuedTask.task(slotId),
+          timeoutPromise,
+        ]);
 
         const duration = Date.now() - startTime;
         this.recordSuccess(duration);
@@ -151,7 +185,10 @@ export class ConcurrencyPool {
         );
       } finally {
         if (promiseRef.current !== undefined) {
-          this.runningTasks.delete(promiseRef.current);
+          this.runningSlots.delete(slotId);
+          if (!this.stoppedSlots.has(slotId)) {
+            this.availableSlots.add(slotId);
+          }
         }
         this.processQueue();
       }
@@ -159,7 +196,7 @@ export class ConcurrencyPool {
 
     const taskPromise = runAsync();
     promiseRef.current = taskPromise;
-    this.runningTasks.add(taskPromise);
+    this.runningSlots.set(slotId, { slotId, promise: taskPromise });
   }
 
   private recordSuccess(duration: number): void {
@@ -234,7 +271,7 @@ export class ConcurrencyPool {
       currentConcurrency: this.currentConcurrency,
       desiredConcurrency: this.options.desiredConcurrency,
       pendingTasks: this.taskQueue.length,
-      runningTasks: this.runningTasks.size,
+      runningTasks: this.runningSlots.size,
       completedTasks: this.completedTasks,
       failedTasks: this.failedTasks,
       avgTaskDurationMs:
@@ -260,7 +297,7 @@ export class ConcurrencyPool {
   }
 
   hasTasks(): boolean {
-    return this.taskQueue.length > 0 || this.runningTasks.size > 0;
+    return this.taskQueue.length > 0 || this.runningSlots.size > 0;
   }
 
   clearPending(): void {
@@ -274,5 +311,42 @@ export class ConcurrencyPool {
     this.isRunning = false;
     this.stopAutoscaling();
     this.clearPending();
+  }
+
+  pauseSlot(slotId: number): void {
+    if (slotId >= 1 && slotId <= this.options.maxConcurrency) {
+      this.pausedSlots.add(slotId);
+    }
+  }
+
+  resumeSlot(slotId: number): void {
+    if (slotId >= 1 && slotId <= this.options.maxConcurrency) {
+      this.pausedSlots.delete(slotId);
+      if (this.isRunning && !this.isPaused) {
+        this.processQueue();
+      }
+    }
+  }
+
+  stopSlot(slotId: number): void {
+    if (slotId >= 1 && slotId <= this.options.maxConcurrency) {
+      this.stoppedSlots.add(slotId);
+    }
+  }
+
+  getSlotStatus(slotId: number): SlotStatus {
+    if (this.runningSlots.has(slotId)) return "running";
+    if (this.stoppedSlots.has(slotId)) return "stopped";
+    if (this.pausedSlots.has(slotId)) return "paused";
+    if (this.availableSlots.has(slotId)) return "idle";
+    return "idle";
+  }
+
+  getAgentStatuses(): AgentStatus[] {
+    const result: AgentStatus[] = [];
+    for (let i = 1; i <= this.options.maxConcurrency; i++) {
+      result.push({ slotId: i, status: this.getSlotStatus(i) });
+    }
+    return result;
   }
 }

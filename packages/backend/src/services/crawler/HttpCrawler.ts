@@ -4,6 +4,7 @@
  */
 
 import {
+  type AgentStatus,
   ConcurrencyPool,
   type CrawlerState,
   type CrawlerStatistics,
@@ -22,6 +23,7 @@ import { CompositeExtractor, HtmlExtractor } from "../../parsers";
 import { HttpClient } from "../../repositories";
 
 import { CRAWLER_DEFAULTS } from "./constants";
+import { matchesHttpqlFilter } from "./httpqlFilter";
 import { filterLinksByStrategy, getDomain } from "./linkProcessor";
 import { RobotsHandler } from "./robotsHandler";
 import { StatsTracker } from "./statsTracker";
@@ -68,6 +70,7 @@ export class HttpCrawler implements CrawlerInterface {
 
   private eventListeners: Map<CrawlerEventType, CrawlerEventListener[]> =
     new Map();
+  private startedSlots: Set<number> = new Set();
   private log: LogInterface;
   private dataset: Record<string, unknown>[] = [];
 
@@ -88,6 +91,7 @@ export class HttpCrawler implements CrawlerInterface {
     this.pool = new ConcurrencyPool({
       maxConcurrency: this.options.maxConcurrency,
       minConcurrency: this.options.minConcurrency,
+      desiredConcurrency: this.options.maxConcurrency,
       taskTimeoutMs: this.options.requestHandlerTimeoutMs,
     });
 
@@ -156,6 +160,7 @@ export class HttpCrawler implements CrawlerInterface {
       requestQueue: options.requestQueue ?? new RequestQueue(),
       router: options.router ?? new Router(),
       requestHandler: options.requestHandler,
+      httpqlFilter: options.httpqlFilter,
     };
   }
 
@@ -271,6 +276,22 @@ export class HttpCrawler implements CrawlerInterface {
     return [...this.dataset];
   }
 
+  pauseAgent(agentId: number): void {
+    this.pool.pauseSlot(agentId);
+  }
+
+  resumeAgent(agentId: number): void {
+    this.pool.resumeSlot(agentId);
+  }
+
+  stopAgent(agentId: number): void {
+    this.pool.stopSlot(agentId);
+  }
+
+  getAgentStatuses(): AgentStatus[] {
+    return this.pool.getAgentStatuses();
+  }
+
   /**
    * Registers an event listener.
    * @param event - Event type to listen for (e.g., 'requestCompleted', 'crawlerStarted')
@@ -325,8 +346,12 @@ export class HttpCrawler implements CrawlerInterface {
           continue;
         }
 
-        this.pool.addTask(async () => {
-          await this.processRequest(request);
+        this.pool.addTask(async (slotId) => {
+          if (!this.startedSlots.has(slotId)) {
+            this.startedSlots.add(slotId);
+            this.emit("agentStarted", { slotId });
+          }
+          await this.processRequest(request, slotId);
         });
       }
 
@@ -345,7 +370,10 @@ export class HttpCrawler implements CrawlerInterface {
   /**
    * Processes a single request.
    */
-  private async processRequest(request: Request): Promise<void> {
+  private async processRequest(
+    request: Request,
+    slotId: number,
+  ): Promise<void> {
     const domain = getDomain(request.url);
 
     try {
@@ -417,17 +445,21 @@ export class HttpCrawler implements CrawlerInterface {
         session.recordSuccess();
       }
 
-      this.emit("requestCompleted", { request, response });
+      this.emit("requestCompleted", { request, response, slotId });
     } catch (error) {
       const err = error instanceof Error ? error : new Error(String(error));
-      this.handleRequestError(request, err);
+      this.handleRequestError(request, err, slotId);
     }
   }
 
   /**
    * Handles a failed request.
    */
-  private handleRequestError(request: Request, error: Error): void {
+  private handleRequestError(
+    request: Request,
+    error: Error,
+    slotId: number,
+  ): void {
     this.log.error(`Request failed: ${request.url}`, { error: error.message });
 
     const errorType = error.constructor.name;
@@ -456,7 +488,7 @@ export class HttpCrawler implements CrawlerInterface {
         }
       }
 
-      this.emit("requestFailed", { request, error });
+      this.emit("requestFailed", { request, error, slotId });
     }
   }
 
@@ -508,13 +540,21 @@ export class HttpCrawler implements CrawlerInterface {
     const result = tempExtractor.extract(response);
     let links = result.links;
 
-    // Filter links based on strategy
     links = filterLinksByStrategy(
       links,
       response.url,
       options.strategy as LinkStrategy | undefined,
       this.options.sameDomainOnly,
     );
+
+    if (
+      this.options.httpqlFilter !== undefined &&
+      this.options.httpqlFilter.trim() !== ""
+    ) {
+      links = links.filter((link) =>
+        matchesHttpqlFilter(link.url, this.options.httpqlFilter, "GET"),
+      );
+    }
 
     let added = 0;
     for (const link of links) {

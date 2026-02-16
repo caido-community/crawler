@@ -2,9 +2,8 @@ import { configStore } from "../stores/configStore";
 import { jobsStore } from "../stores/jobsStore";
 import type { BackendSDK, InterceptedRequest } from "../types";
 
-// jobsStore is still used for checking existing jobs, but updates are handled by CrawlerService
-
 import { CrawlerService } from "./crawler";
+import { matchesHttpqlFilter } from "./crawler/httpqlFilter";
 
 class AutoCrawlServiceClass {
   private seenHosts: Set<string> = new Set();
@@ -45,9 +44,17 @@ class AutoCrawlServiceClass {
       return;
     }
 
-    this.seenHosts.add(host);
-
     const url = this.buildUrl(request);
+
+    const httpqlFilter = config.httpqlFilter?.trim();
+    if (httpqlFilter !== undefined && httpqlFilter !== "") {
+      if (!matchesHttpqlFilter(url, httpqlFilter)) {
+        this.seenHosts.add(host);
+        return;
+      }
+    }
+
+    this.seenHosts.add(host);
     this.startCrawl(url, sdk);
   }
 
@@ -67,13 +74,12 @@ class AutoCrawlServiceClass {
   }
 
   private startCrawl(url: string, sdk: BackendSDK): void {
-    // jobsStore updates are now handled internally by CrawlerService
-    const result = CrawlerService.start(url, {
+    CrawlerService.start(url, {
       onProgress: (stats, jobId) => {
         sdk.api.send("crawl:progress", {
           jobId,
-          crawledUrls: stats.crawledUrls,
-          discoveredUrls: stats.discoveredUrls,
+          crawled: stats.crawledUrls,
+          discovered: stats.discoveredUrls,
         });
       },
       onComplete: (stats, jobId) => {
@@ -82,15 +88,13 @@ class AutoCrawlServiceClass {
           totalUrls: stats.crawledUrls,
         });
       },
+    }).then((result) => {
+      if (result.kind === "Ok") {
+        const { job, jobId } = result.value;
+        sdk.api.send("job:created", job);
+        sdk.api.send("crawl:started", { jobId, host: job.host });
+      }
     });
-
-    if (result.kind === "Ok") {
-      sdk.api.send("crawl:started", {
-        jobId: result.value.jobId,
-        host: result.value.job.host,
-        targetUrl: result.value.job.targetUrl,
-      });
-    }
   }
 
   private isStaticResource(path: string): boolean {

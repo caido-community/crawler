@@ -7,10 +7,14 @@ export const CrawlConfigSchema = z.object({
   requestDelay: z.number().min(0),
   maxDepth: z.number().min(1),
   maxPagesPerDomain: z.number().min(1),
+  manualCrawlAgents: z.number().min(1).max(20),
   includePatterns: z.array(z.string()),
   excludePatterns: z.array(z.string()),
   respectRobotsTxt: z.boolean(),
   userAgent: z.string(),
+  httpqlFilter: z.string().optional(),
+  devMode: z.boolean().optional(),
+  devModeDisableHttpHistory: z.boolean().optional(),
 });
 
 export type CrawlConfig = z.infer<typeof CrawlConfigSchema>;
@@ -22,10 +26,13 @@ export const DEFAULT_CONFIG: CrawlConfig = {
   requestDelay: 100,
   maxDepth: 5,
   maxPagesPerDomain: 100,
+  manualCrawlAgents: 5,
   includePatterns: [],
   excludePatterns: [],
   respectRobotsTxt: false,
   userAgent: "Caido-Crawler",
+  devMode: false,
+  devModeDisableHttpHistory: false,
 };
 
 export const CrawlJobStatusSchema = z.enum([
@@ -34,6 +41,7 @@ export const CrawlJobStatusSchema = z.enum([
   "completed",
   "failed",
   "paused",
+  "cancelled",
 ]);
 
 export type CrawlJobStatus = z.infer<typeof CrawlJobStatusSchema>;
@@ -48,9 +56,25 @@ export const CrawlJobSchema = z.object({
   crawledUrls: z.number(),
   startedAt: z.coerce.date(),
   completedAt: z.coerce.date().optional(),
+  agentCount: z.number().optional(),
+  title: z.string().optional(),
 });
 
 export type CrawlJob = z.infer<typeof CrawlJobSchema>;
+
+export type CrawlJobAgentStatus =
+  | "idle"
+  | "running"
+  | "paused"
+  | "stopped"
+  | "completed";
+
+export type CrawlJobAgent = {
+  agentId: number;
+  status: CrawlJobAgentStatus;
+};
+
+export type CrawlLogEntry = { line: string; level: string };
 
 export const CrawlQueueItemSchema = z.object({
   url: z.string(),
@@ -74,6 +98,12 @@ export type BackendEvents = {
   }) => void;
   "crawl:completed": (data: { jobId: string; totalUrls: number }) => void;
   "crawl:failed": (data: { jobId: string; error: string }) => void;
+  "crawl:log": (data: {
+    jobId: string;
+    line: string;
+    agentId?: number;
+    level?: string;
+  }) => void;
   "config:updated": (config: CrawlConfig) => void;
   "project:changed": (projectId: string | undefined) => void;
   "job:updated": (job: CrawlJob) => void;

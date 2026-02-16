@@ -61,7 +61,10 @@ class JobsStore extends ProjectScopedStore<JobsData> implements IJobsStore {
 
   clearCompletedJobs(): void {
     this.data.jobs = this.data.jobs.filter(
-      (job) => job.status !== "completed" && job.status !== "failed",
+      (job) =>
+        job.status !== "completed" &&
+        job.status !== "failed" &&
+        job.status !== "cancelled",
     );
     this.notify();
     this.saveToFile();

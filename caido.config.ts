@@ -12,7 +12,7 @@ export default defineConfig({
   id,
   name: "Crawler",
   description: "Automatic website crawler for sitemap discovery",
-  version: "1.0.0",
+  version: "1.0.1",
   author: {
     name: "Caido Labs Inc.",
     email: "dev@caido.io",

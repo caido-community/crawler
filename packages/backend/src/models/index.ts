@@ -14,8 +14,10 @@ export {
 } from "./sessionPool";
 export {
   ConcurrencyPool,
+  type AgentStatus,
   type ConcurrencyPoolOptions,
   type PoolStats,
+  type SlotStatus,
 } from "./pool";
 export {
   DomainRateLimiter,

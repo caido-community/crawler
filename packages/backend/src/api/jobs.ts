@@ -1,14 +1,17 @@
 import type { SDK } from "caido:plugin";
-import type { CrawlJob, Result } from "shared";
+import type { CrawlJob, CrawlJobAgent, CrawlLogEntry, Result } from "shared";
 
 import { requireSDK } from "../sdk";
 import { CrawlerService } from "../services";
+import { jobLogsStore } from "../stores/jobLogsStore";
 
-export function startCrawl(_sdk: SDK, targetUrl: string): Result<CrawlJob> {
+export async function startCrawl(
+  _sdk: SDK,
+  targetUrl: string,
+): Promise<Result<CrawlJob>> {
   const sdk = requireSDK();
 
-  // jobsStore updates are now handled internally by CrawlerService
-  const result = CrawlerService.start(
+  const result = await CrawlerService.start(
     targetUrl,
     {
       onProgress: (stats, jobId) => {
@@ -29,7 +32,7 @@ export function startCrawl(_sdk: SDK, targetUrl: string): Result<CrawlJob> {
       },
     },
     true,
-  ); // isManual = true for manual crawls
+  );
 
   if (result.kind === "Error") {
     return result;
@@ -46,12 +49,28 @@ export function startCrawl(_sdk: SDK, targetUrl: string): Result<CrawlJob> {
 export function stopCrawl(_sdk: SDK, jobId: string): Result<undefined> {
   const sdk = requireSDK();
 
+  const jobResult = CrawlerService.getJob(jobId);
+  const agentCount =
+    jobResult.kind === "Ok" ? (jobResult.value.agentCount ?? 0) : 0;
+
   const result = CrawlerService.stop(jobId);
 
   if (result.kind === "Ok") {
-    sdk.api.send("crawl:completed", {
+    const updatedJobResult = CrawlerService.getJob(jobId);
+    if (updatedJobResult.kind === "Ok") {
+      sdk.api.send("job:updated", updatedJobResult.value);
+    }
+    for (let agentId = 1; agentId <= agentCount; agentId++) {
+      const line = `Crawl Agent ${agentId} has been stopped.`;
+      jobLogsStore.append(jobId, line, agentId, "error");
+      sdk.api.send("crawl:log", { jobId, line, agentId, level: "error" });
+    }
+    const allStoppedLine = "All agents have been stopped.";
+    jobLogsStore.append(jobId, allStoppedLine, undefined, "error");
+    sdk.api.send("crawl:log", {
       jobId,
-      totalUrls: result.value.totalUrls,
+      line: allStoppedLine,
+      level: "error",
     });
   }
 
@@ -94,12 +113,102 @@ export function getJob(_sdk: SDK, jobId: string): Result<CrawlJob> {
   return CrawlerService.getJob(jobId);
 }
 
+export function updateJob(
+  _sdk: SDK,
+  jobId: string,
+  updates: { title?: string },
+): Result<CrawlJob> {
+  const sdk = requireSDK();
+  const result = CrawlerService.updateJob(jobId, updates);
+  if (result.kind === "Ok") {
+    sdk.api.send("job:updated", result.value);
+  }
+  return result;
+}
+
+export function getJobLogs(
+  _sdk: SDK,
+  jobId: string,
+  agentId?: number,
+): Result<CrawlLogEntry[]> {
+  const logs = jobLogsStore.getLogs(jobId, agentId);
+  return { kind: "Ok", value: logs };
+}
+
+export function getJobAgents(
+  _sdk: SDK,
+  jobId: string,
+): Result<CrawlJobAgent[]> {
+  return CrawlerService.getJobAgents(jobId);
+}
+
+export function pauseAgent(
+  _sdk: SDK,
+  jobId: string,
+  agentId: number,
+): Result<undefined> {
+  const result = CrawlerService.pauseAgent(jobId, agentId);
+  if (result.kind === "Ok") {
+    const sdk = requireSDK();
+    const line = `Crawl Agent ${agentId} has been paused.`;
+    jobLogsStore.append(jobId, line, agentId, "warning");
+    sdk.api.send("crawl:log", { jobId, line, agentId, level: "warning" });
+  }
+  return result;
+}
+
+export function resumeAgent(
+  _sdk: SDK,
+  jobId: string,
+  agentId: number,
+): Result<undefined> {
+  const result = CrawlerService.resumeAgent(jobId, agentId);
+  if (result.kind === "Ok") {
+    const sdk = requireSDK();
+    const line = `Crawl Agent ${agentId} has started again.`;
+    jobLogsStore.append(jobId, line, agentId, "success");
+    sdk.api.send("crawl:log", { jobId, line, agentId, level: "success" });
+  }
+  return result;
+}
+
+export function stopAgent(
+  _sdk: SDK,
+  jobId: string,
+  agentId: number,
+): Result<undefined> {
+  const result = CrawlerService.stopAgent(jobId, agentId);
+  if (result.kind === "Ok") {
+    const sdk = requireSDK();
+    const line = `Crawl Agent ${agentId} has been stopped.`;
+    jobLogsStore.append(jobId, line, agentId, "error");
+    sdk.api.send("crawl:log", { jobId, line, agentId, level: "error" });
+  }
+  return result;
+}
+
 export function clearCompletedJobs(_sdk: SDK): Result<undefined> {
   const sdk = requireSDK();
+
+  const jobsResult = CrawlerService.getJobs();
+  const completedIds =
+    jobsResult.kind === "Ok"
+      ? jobsResult.value
+          .filter(
+            (j) =>
+              j.status === "completed" ||
+              j.status === "failed" ||
+              j.status === "cancelled",
+          )
+          .map((j) => j.id)
+      : [];
 
   const result = CrawlerService.clearCompleted();
 
   if (result.kind === "Ok") {
+    for (const id of completedIds) {
+      jobLogsStore.clear(id);
+    }
     sdk.api.send("jobs:cleared");
   }
 
@@ -112,6 +221,7 @@ export function clearAllJobs(_sdk: SDK): Result<undefined> {
   const result = CrawlerService.clearAll();
 
   if (result.kind === "Ok") {
+    jobLogsStore.clearAll();
     sdk.api.send("jobs:cleared");
   }
 
@@ -124,6 +234,7 @@ export function deleteJob(_sdk: SDK, jobId: string): Result<undefined> {
   const result = CrawlerService.delete(jobId);
 
   if (result.kind === "Ok") {
+    jobLogsStore.clear(jobId);
     sdk.api.send("job:deleted", jobId);
   }
 

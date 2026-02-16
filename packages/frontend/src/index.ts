@@ -1,32 +1,40 @@
 import { Classic } from "@caido/primevue";
 import { createPinia } from "pinia";
 import PrimeVue from "primevue/config";
-import { createApp, defineComponent } from "vue";
+import ConfirmationService from "primevue/confirmationservice";
+import { createApp } from "vue";
 
-import { Configuration } from "./components/Configuration";
 import { SDKPlugin } from "./plugins/sdk";
 import "./styles/index.css";
 import type { FrontendSDK } from "./types";
+import App from "./views/App.vue";
 
 export const init = (sdk: FrontendSDK) => {
-  const app = createApp(defineComponent({}));
+  const app = createApp(App);
   const pinia = createPinia();
 
   app.use(PrimeVue, {
     unstyled: true,
     pt: Classic,
   });
+  app.use(ConfirmationService);
   app.use(pinia);
   app.use(SDKPlugin, sdk);
 
-  // Register settings in Caido Settings -> Plugins section
-  sdk.settings.addToSlot("plugins-section", {
-    type: "Custom",
-    name: "Crawler",
-    definition: { component: Configuration },
+  const root = document.createElement("div");
+  Object.assign(root.style, {
+    height: "100%",
+    width: "100%",
+  });
+  app.mount(root);
+
+  sdk.navigation.addPage("/crawler", {
+    body: root,
+  });
+  sdk.sidebar.registerItem("Crawler", "/crawler", {
+    icon: "fas fa-spider",
   });
 
-  // Register context menu command for manual crawl
   sdk.commands.register("crawl-url", {
     name: "Crawl Host",
     run: async (context) => {
@@ -90,7 +98,6 @@ export const init = (sdk: FrontendSDK) => {
     },
   });
 
-  // Register context menu items
   sdk.menu.registerItem({
     type: "RequestRow",
     commandId: "crawl-url",

@@ -15,9 +15,13 @@ function createMockCrawler(status = "running") {
       requestsFailed: 1,
       requestsTotal: 20,
     }),
+    getAgentStatuses: vi.fn().mockReturnValue([]),
     pause: vi.fn(),
     resume: vi.fn(),
     abort: vi.fn(),
+    pauseAgent: vi.fn(),
+    resumeAgent: vi.fn(),
+    stopAgent: vi.fn(),
   };
 }
 
